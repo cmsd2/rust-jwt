@@ -1,6 +1,12 @@
 # jsonwebtoken
 
-[![Build Status](https://travis-ci.org/Keats/rust-jwt.svg)](https://travis-ci.org/Keats/rust-jwt)
+This is a hard fork of [https://github.com/Keats/rust-jwt](https://github.com/Keats/rust-jwt)
+
+It uses serde instead of rustc_serialize.
+It also adds openssl for RSA.
+
+This is a work in progress.
+
 
 ## Installation
 Add the following to Cargo.toml:
