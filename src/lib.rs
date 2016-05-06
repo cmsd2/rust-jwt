@@ -1,124 +1,63 @@
 //! Create and parses JWT (JSON Web Tokens)
 //!
+#![feature(custom_derive, plugin)]
+#![plugin(serde_macros)]
 
+#![recursion_limit="100"] // for quick-error
 #![cfg_attr(feature = "dev", allow(unstable_features))]
 #![cfg_attr(feature = "dev", feature(plugin))]
 #![cfg_attr(feature = "dev", plugin(clippy))]
 
 extern crate rustc_serialize;
-extern crate crypto;
+extern crate crypto as rust_crypto;
+#[macro_use] extern crate quick_error;
+extern crate serde;
+extern crate serde_json;
+extern crate openssl;
+#[macro_use] extern crate log;
 
-use rustc_serialize::{json, Encodable, Decodable};
 use rustc_serialize::base64::{self, ToBase64, FromBase64};
-use rustc_serialize::json::{ToJson, Json};
-use crypto::sha2::{Sha256, Sha384, Sha512};
-use crypto::hmac::Hmac;
-use crypto::mac::Mac;
-use crypto::digest::Digest;
-use crypto::util::fixed_time_eq;
+use serde::{Serialize, Deserialize};
+use rust_crypto::sha2::{Sha256, Sha384, Sha512};
+use rust_crypto::hmac::Hmac;
+use rust_crypto::mac::Mac;
+use rust_crypto::digest::Digest;
+use rust_crypto::util::fixed_time_eq;
 
-pub mod errors;
-use errors::Error;
-use std::collections::BTreeMap;
+pub mod jwk;
+pub mod signer;
+pub mod verifier;
+pub mod algorithm;
+pub mod result;
+pub mod header;
+pub mod crypto;
+pub mod key_type;
 
-#[derive(Debug, PartialEq, Copy, Clone, RustcDecodable, RustcEncodable)]
-/// The algorithms supported for signing/verifying
-pub enum Algorithm {
-    HS256,
-    HS384,
-    HS512
-}
-
-impl ToJson for Algorithm {
-    fn to_json(&self) -> Json {
-        match *self {
-            Algorithm::HS256 => Json::String("HS256".to_owned()),
-            Algorithm::HS384 => Json::String("HS384".to_owned()),
-            Algorithm::HS512 => Json::String("HS512".to_owned()),
-        }
-    }
-}
+use header::*;
+use algorithm::*;
+use result::*;
 
 /// A part of the JWT: header and claims specifically
 /// Allows converting from/to struct with base64
 pub trait Part {
     type Encoded: AsRef<str>;
 
-    fn from_base64<B: AsRef<[u8]>>(encoded: B) -> Result<Self, Error> where Self: Sized;
-    fn to_base64(&self) -> Result<Self::Encoded, Error>;
+    fn from_base64<B: AsRef<[u8]>>(encoded: B) -> JwtResult<Self> where Self: Sized;
+    fn to_base64(&self) -> JwtResult<Self::Encoded>;
 }
 
-impl<T> Part for T where T: Encodable + Decodable {
+impl<T> Part for T where T: Serialize + Deserialize {
     type Encoded = String;
 
-    fn to_base64(&self) -> Result<Self::Encoded, Error> {
-        let encoded = try!(json::encode(&self));
+    fn to_base64(&self) -> JwtResult<Self::Encoded> {
+        let encoded = try!(serde_json::ser::to_string(&self));
         Ok(encoded.as_bytes().to_base64(base64::URL_SAFE))
     }
 
-    fn from_base64<B: AsRef<[u8]>>(encoded: B) -> Result<T, Error> {
+    fn from_base64<B: AsRef<[u8]>>(encoded: B) -> JwtResult<T> {
         let decoded = try!(encoded.as_ref().from_base64());
         let s = try!(String::from_utf8(decoded));
-        Ok(try!(json::decode(&s)))
-    }
-}
-
-#[derive(Debug, PartialEq, RustcDecodable)]
-/// A basic JWT header part, the alg defaults to HS256 and typ is automatically
-/// set to `JWT`. All the other fields are optional
-pub struct Header {
-    typ: String,
-    pub alg: Algorithm,
-    pub jku: Option<String>,
-    pub kid: Option<String>,
-    pub x5u: Option<String>,
-    pub x5t: Option<String>
-}
-
-impl Header {
-    pub fn new(algorithm: Algorithm) -> Header {
-        Header {
-            typ: "JWT".to_owned(),
-            alg: algorithm,
-            jku: None,
-            kid: None,
-            x5u: None,
-            x5t: None
-        }
-    }
-}
-
-impl Default for Header {
-    fn default() -> Header {
-        Header::new(Algorithm::HS256)
-    }
-}
-
-impl Encodable for Header {
-    fn encode<S: rustc_serialize::Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
-        self.to_json().encode(s)
-    }
-}
-
-impl ToJson for Header {
-    fn to_json(&self) -> Json {
-        let mut d = BTreeMap::new();
-        d.insert("typ".to_string(), self.typ.to_json());
-        d.insert("alg".to_string(), self.alg.to_json());
-
-        // Define a macro to reduce boilerplate.
-        macro_rules! optional {
-            ($field_name:ident) => (
-                if let Some(ref value) = self.$field_name {
-                    d.insert(stringify!($field_name).to_string(), value.to_json());
-                }
-            )
-        }
-        optional!(jku);
-        optional!(kid);
-        optional!(x5u);
-        optional!(x5t);
-        Json::Object(d)
+        Ok(try!(serde_json::from_str(&s)))
     }
 }
 
@@ -142,6 +81,7 @@ pub fn sign(data: &str, secret: &[u8], algorithm: Algorithm) -> String {
         Algorithm::HS256 => crypt(Sha256::new(), data, secret),
         Algorithm::HS384 => crypt(Sha384::new(), data, secret),
         Algorithm::HS512 => crypt(Sha512::new(), data, secret),
+        _ => unimplemented!()
     }
 }
 
@@ -151,7 +91,7 @@ pub fn verify(signature: &str, data: &str, secret: &[u8], algorithm: Algorithm) 
 }
 
 /// Encode the claims passed and sign the payload using the algorithm from the header and the secret
-pub fn encode<T: Part>(header: Header, claims: &T, secret: &[u8]) -> Result<String, Error> {
+pub fn encode<T: Part>(header: Header, claims: &T, secret: &[u8]) -> JwtResult<String> {
     let encoded_header = try!(header.to_base64());
     let encoded_claims = try!(claims.to_base64());
     // seems to be a tiny bit faster than format!("{}.{}", x, y)
@@ -168,14 +108,14 @@ macro_rules! expect_two {
         let mut i = $iter; // evaluate the expr
         match (i.next(), i.next(), i.next()) {
             (Some(first), Some(second), None) => (first, second),
-            _ => return Err(Error::InvalidToken)
+            _ => return Err(JwtError::InvalidToken)
         }
     }}
 }
 
 /// Decode a token into a Claims struct
 /// If the token or its signature is invalid, it will return an error
-pub fn decode<T: Part>(token: &str, secret: &[u8], algorithm: Algorithm) -> Result<TokenData<T>, Error> {
+pub fn decode<T: Part>(token: &str, secret: &[u8], algorithm: Algorithm) -> JwtResult<TokenData<T>> {
     let (signature, payload) = expect_two!(token.rsplitn(2, '.'));
 
     let is_valid = verify(
@@ -186,14 +126,14 @@ pub fn decode<T: Part>(token: &str, secret: &[u8], algorithm: Algorithm) -> Resu
     );
 
     if !is_valid {
-        return Err(Error::InvalidSignature);
+        return Err(JwtError::InvalidSignature);
     }
 
     let (claims, header) = expect_two!(payload.rsplitn(2, '.'));
 
     let header = try!(Header::from_base64(header));
     if header.alg != algorithm {
-        return Err(Error::WrongAlgorithmHeader);
+        return Err(JwtError::WrongAlgorithmHeader);
     }
     let decoded_claims = try!(T::from_base64(claims));
 
@@ -202,9 +142,11 @@ pub fn decode<T: Part>(token: &str, secret: &[u8], algorithm: Algorithm) -> Resu
 
 #[cfg(test)]
 mod tests {
-    use super::{encode, decode, Algorithm, Header, sign, verify};
+    use super::{encode, decode, sign, verify};
+    use algorithm::*;
+    use header::*;
 
-    #[derive(Debug, PartialEq, Clone, RustcEncodable, RustcDecodable)]
+    #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
     struct Claims {
         sub: String,
         company: String
