@@ -13,7 +13,7 @@ keywords = ["jwt", "web", "api", "token", "json"]
 rustc-serialize = "0.3"
 clippy = {version = "~0.0.44", optional = true}
 rust-crypto = "0.2.35"
-openssl = {git = "https://github.com/sfackler/rust-openssl.git", optional = true}
+openssl = {git = "https://github.com/sfackler/rust-openssl.git"}
 quick-error = "1.0"
 serde = "0.7.0"
 serde_json = "0.7.0"
@@ -21,13 +21,11 @@ serde_macros = "0.7.2"
 log = "*"
 chrono = "*"
 time = "*"
-rbvt = {path = "../rbvt"}
+rbvt = {git = "https://github.com/cmsd2/rbvt.git"}
 cast = "*"
 
 [features]
-default = ["ssl"]
 dev = ["clippy"]
-ssl = ["openssl"]
 
 [profile.bench]
 lto = true
