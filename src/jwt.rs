@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::result::Result;
 use super::*;
+use header::Header;
 use claims::expiry::*;
 use claims::not_before::*;
 use result::{JwtError, JwtResult};
@@ -9,18 +10,40 @@ use serde;
 use serde::{Serialize, Deserialize};
 use serde_json;
 use cast;
+use signer::Signer;
+use verifier::Verifier;
 
 pub type Jwt = TokenData<JwtClaims>;
 
+impl Jwt {
+    pub fn new() -> Jwt {
+        Jwt {
+            header: Header::default(),
+            claims: JwtClaims::new(),
+        }
+    }
+    
+    /// Encode the claims passed and sign the payload using the algorithm from the header and the secret
+    pub fn encode<S: Signer>(&self, signer: &S) -> JwtResult<String> {
+        ::encode(self.header.clone(), &self.claims, signer)
+    }
+
+    /// Verify the signature using the header-specified algorithm and decode the json web token into headedr and claims.
+    pub fn decode<V: Verifier>(token: &str, verifier: &V) -> JwtResult<Jwt> {
+        ::decode(token, verifier)
+    }
+
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct JwtClaims {
-    claims: HashMap<String, serde_json::value::Value>,
+    claims: BTreeMap<String, serde_json::value::Value>,
 }
 
 impl JwtClaims {
     pub fn new() -> JwtClaims {
         JwtClaims {
-            claims: HashMap::new(),
+            claims: BTreeMap::new(),
         }
     }
 }
@@ -105,7 +128,7 @@ impl serde::de::Visitor for JwtClaimsDeVisitor {
     fn visit_map<V>(&mut self, mut visitor: V) -> Result<JwtClaims, V::Error>
         where V: serde::de::MapVisitor,
     {
-        let mut claims = HashMap::<String, serde_json::value::Value>::new();
+        let mut claims = BTreeMap::<String, serde_json::value::Value>::new();
 
         loop {
             if let Some(key) = try!(visitor.visit_key::<String>()) {
@@ -138,6 +161,7 @@ mod test {
     use claims::not_before::*;
     use claims::time::*;
     use rbvt::validation::*;
+    use crypto::mac_signer::MacSigner;
     
     #[test]
     fn test_header_serde() {
@@ -164,5 +188,30 @@ mod test {
         vs.rule(Box::new(NotBeforeVerifier::new(FixedTimeProvider(now))));
         
         assert!(vs.validate(&h).unwrap());
+    }
+    
+    #[test]
+    fn test_jwt_encode() {
+        let now = UTC.timestamp(1462657679, 0);
+        
+        let mut j = Jwt::new();
+        let signer = MacSigner::new("secret".as_bytes()).unwrap();
+        
+        j.claims.claims.insert("exp".to_owned(), serde_json::to_value(&now.timestamp()));
+        j.claims.claims.insert("sub".to_owned(), serde_json::to_value("b@b.com"));
+
+        let s = j.encode(&signer).unwrap();
+
+        assert_eq!(s, "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE0NjI2NTc2NzksInN1YiI6ImJAYi5jb20ifQ.ukkwOH4BPNgykw7I7RI_hXNj1ZNH4BIErK0xD3tsM1M");
+    }
+    
+    #[test]
+    fn test_jwt_decode() {
+        let signer = MacSigner::new("secret".as_bytes()).unwrap();
+        
+        let j = Jwt::decode("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE0NjI2NTc2NzksInN1YiI6ImJAYi5jb20ifQ.ukkwOH4BPNgykw7I7RI_hXNj1ZNH4BIErK0xD3tsM1M", &signer).unwrap();
+        
+        assert_eq!(j.claims.claims.get("exp"), Some(serde_json::to_value(&1462657679)).as_ref());
+        assert_eq!(j.claims.claims.get("sub"), Some(serde_json::to_value("b@b.com")).as_ref());
     }
 }
