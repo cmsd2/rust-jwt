@@ -15,6 +15,10 @@ extern crate serde;
 extern crate serde_json;
 extern crate openssl;
 #[macro_use] extern crate log;
+extern crate chrono;
+extern crate time;
+extern crate rbvt;
+extern crate cast;
 
 use rustc_serialize::base64::{self, ToBase64, FromBase64};
 use serde::{Serialize, Deserialize};
@@ -28,6 +32,8 @@ pub mod header;
 pub mod crypto;
 pub mod key_type;
 pub mod bignum;
+pub mod claims;
+pub mod jwt;
 
 use header::*;
 use result::*;

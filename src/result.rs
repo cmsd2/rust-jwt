@@ -6,6 +6,8 @@ use std::fmt;
 use serde_json;
 use rustc_serialize;
 use openssl;
+use chrono;
+use cast;
 
 use algorithm::Algorithm;
 
@@ -105,6 +107,24 @@ quick_error! {
         WrongAlgorithmHeader {
             description("wrong algorithm header")
             display("Wrong algorithm header")
+        }
+        
+        InvalidClaim(msg: String) {
+            description("invalid claim")
+            display("invalid claim: {}", msg)
+        }
+        
+        DateTimeParseError(e: chrono::ParseError) {
+            from()
+            description("datetime parse error")
+            display("datetime parse error: {}", e)
+            cause(e)
+        }
+        
+        NumericConversionError(e: cast::Error) {
+            from()
+            description("numeric conversion error")
+            display("numeric conversion error: {:?}", e)
         }
     }
 }

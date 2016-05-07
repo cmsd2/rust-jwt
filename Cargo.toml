@@ -19,6 +19,10 @@ serde = "0.7.0"
 serde_json = "0.7.0"
 serde_macros = "0.7.2"
 log = "*"
+chrono = "*"
+time = "*"
+rbvt = {path = "../rbvt"}
+cast = "*"
 
 [features]
 default = ["ssl"]
