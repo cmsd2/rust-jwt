@@ -6,6 +6,8 @@ use serde;
 use serde::{Deserialize, Serializer, Deserializer};
 use serde_json;
 use openssl::bn::BigNum;
+use bignum::*;
+use super::Part;
 
 use key_type::*;
 use result::*;
@@ -30,11 +32,9 @@ impl Jwk {
         
         let b64s = try!(b64.as_string().ok_or(JwtError::InvalidKeyParam(name.to_owned())));
         
-        let octets = try!(b64s.from_base64());
+        let bn = try!(BigNumComponent::from_base64(b64s));
         
-        let bn = try!(BigNum::new_from_slice(&octets));
-        
-        Ok(bn)
+        Ok(bn.into())
     }
 }
 
@@ -124,25 +124,5 @@ impl serde::de::Visitor for JwkVisitor {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use key_type::*;
-    use serde_json;
     
-    #[test]
-    pub fn test_kty_serialize() {
-        let kty = KeyType::RSA;
-        
-        let s = serde_json::to_string(&kty).unwrap();
-        
-        assert_eq!(s, "\"RSA\"");
-    }
-    
-    #[test]
-    pub fn test_kty_deserialize() {
-        let s = "\"RSA\"";
-        
-        let kty = serde_json::from_str::<KeyType>(s).unwrap();
-        
-        assert_eq!(kty, KeyType::RSA);
-    }
 }

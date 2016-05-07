@@ -7,8 +7,8 @@ extern crate serde;
 
 use jwt::{encode, decode};
 use jwt::header::*;
-use jwt::algorithm::*;
 use jwt::result::*;
+use jwt::crypto::mac_signer::MacSigner;
 
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -34,15 +34,15 @@ fn main() {
         sub: "b@b.com".to_owned(),
         company: "ACME".to_owned()
     };
-    let key = "secret";
-    let token = match encode(Header::default(), &my_claims, key.as_ref()) {
+    let signer = MacSigner::new("secret".as_bytes()).unwrap();
+    let token = match encode(Header::default(), &my_claims, &signer) {
         Ok(t) => t,
         Err(_) => panic!() // in practice you would return the error
     };
 
     println!("{:?}", token);
 
-    let token_data = match decode::<Claims>(&token, key.as_ref(), Algorithm::HS256) {
+    let token_data = match decode::<Claims, MacSigner>(&token, &signer) {
         Ok(c) => c,
         Err(err) => match err {
             JwtError::InvalidToken => panic!(), // Example on how to handle a specific error

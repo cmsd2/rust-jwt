@@ -46,3 +46,27 @@ impl serde::de::Visitor for KeyTypeVisitor {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use key_type::*;
+    use serde_json;
+    
+    #[test]
+    pub fn test_kty_serialize() {
+        let kty = KeyType::RSA;
+        
+        let s = serde_json::to_string(&kty).unwrap();
+        
+        assert_eq!(s, "\"RSA\"");
+    }
+    
+    #[test]
+    pub fn test_kty_deserialize() {
+        let s = "\"RSA\"";
+        
+        let kty = serde_json::from_str::<KeyType>(s).unwrap();
+        
+        assert_eq!(kty, KeyType::RSA);
+    }
+}

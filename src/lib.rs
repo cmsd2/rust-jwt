@@ -18,11 +18,6 @@ extern crate openssl;
 
 use rustc_serialize::base64::{self, ToBase64, FromBase64};
 use serde::{Serialize, Deserialize};
-use rust_crypto::sha2::{Sha256, Sha384, Sha512};
-use rust_crypto::hmac::Hmac;
-use rust_crypto::mac::Mac;
-use rust_crypto::digest::Digest;
-use rust_crypto::util::fixed_time_eq;
 
 pub mod jwk;
 pub mod signer;
@@ -32,10 +27,12 @@ pub mod result;
 pub mod header;
 pub mod crypto;
 pub mod key_type;
+pub mod bignum;
 
 use header::*;
-use algorithm::*;
 use result::*;
+use signer::Signer;
+use verifier::Verifier;
 
 /// A part of the JWT: header and claims specifically
 /// Allows converting from/to struct with base64
@@ -68,35 +65,13 @@ pub struct TokenData<T: Part> {
     pub claims: T
 }
 
-/// Take the payload of a JWT and sign it using the algorithm given.
-/// Returns the base64 url safe encoded of the hmac result
-pub fn sign(data: &str, secret: &[u8], algorithm: Algorithm) -> String {
-    fn crypt<D: Digest>(digest: D, data: &str, secret: &[u8]) -> String {
-        let mut hmac = Hmac::new(digest, secret);
-        hmac.input(data.as_bytes());
-        hmac.result().code().to_base64(base64::URL_SAFE)
-    }
-
-    match algorithm {
-        Algorithm::HS256 => crypt(Sha256::new(), data, secret),
-        Algorithm::HS384 => crypt(Sha384::new(), data, secret),
-        Algorithm::HS512 => crypt(Sha512::new(), data, secret),
-        _ => unimplemented!()
-    }
-}
-
-/// Compares the signature given with a re-computed signature
-pub fn verify(signature: &str, data: &str, secret: &[u8], algorithm: Algorithm) -> bool {
-    fixed_time_eq(signature.as_ref(), sign(data, secret, algorithm).as_ref())
-}
-
 /// Encode the claims passed and sign the payload using the algorithm from the header and the secret
-pub fn encode<T: Part>(header: Header, claims: &T, secret: &[u8]) -> JwtResult<String> {
+pub fn encode<T: Part, S: Signer>(header: Header, claims: &T, signer: &S) -> JwtResult<String> {
     let encoded_header = try!(header.to_base64());
     let encoded_claims = try!(claims.to_base64());
     // seems to be a tiny bit faster than format!("{}.{}", x, y)
     let payload = [encoded_header.as_ref(), encoded_claims.as_ref()].join(".");
-    let signature = sign(&*payload, secret.as_ref(), header.alg);
+    let signature = try!(signer.sign(&header, &payload.as_bytes()));
 
     Ok([payload, signature].join("."))
 }
@@ -115,26 +90,23 @@ macro_rules! expect_two {
 
 /// Decode a token into a Claims struct
 /// If the token or its signature is invalid, it will return an error
-pub fn decode<T: Part>(token: &str, secret: &[u8], algorithm: Algorithm) -> JwtResult<TokenData<T>> {
+pub fn decode<T: Part, V: Verifier>(token: &str, verifier: &V) -> JwtResult<TokenData<T>> {
     let (signature, payload) = expect_two!(token.rsplitn(2, '.'));
 
-    let is_valid = verify(
-        signature,
-        payload,
-        secret,
-        algorithm
-    );
+    let (claims, header) = expect_two!(payload.rsplitn(2, '.'));
+
+    let header = try!(Header::from_base64(header));
+    
+    let is_valid = try!(verifier.verify(
+        &header,
+        &payload.as_bytes(),
+        signature
+    ));
 
     if !is_valid {
         return Err(JwtError::InvalidSignature);
     }
 
-    let (claims, header) = expect_two!(payload.rsplitn(2, '.'));
-
-    let header = try!(Header::from_base64(header));
-    if header.alg != algorithm {
-        return Err(JwtError::WrongAlgorithmHeader);
-    }
     let decoded_claims = try!(T::from_base64(claims));
 
     Ok(TokenData { header: header, claims: decoded_claims})
@@ -142,9 +114,12 @@ pub fn decode<T: Part>(token: &str, secret: &[u8], algorithm: Algorithm) -> JwtR
 
 #[cfg(test)]
 mod tests {
-    use super::{encode, decode, sign, verify};
+    use super::{encode, decode};
     use algorithm::*;
     use header::*;
+    use crypto::mac_signer::MacSigner;
+    use signer::Signer;
+    use verifier::Verifier;
 
     #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
     struct Claims {
@@ -154,15 +129,19 @@ mod tests {
 
     #[test]
     fn sign_hs256() {
-        let result = sign("hello world", b"secret", Algorithm::HS256);
+        let signer = MacSigner::new("secret".as_bytes()).unwrap();
+        let header = Header::new(Algorithm::HS256);
+        let result = signer.sign(&header, "hello world".as_bytes()).unwrap();
         let expected = "c0zGLzKEFWj0VxWuufTXiRMk5tlI5MbGDAYhzaxIYjo";
         assert_eq!(result, expected);
     }
 
     #[test]
     fn verify_hs256() {
+        let signer = MacSigner::new("secret".as_bytes()).unwrap();
+        let header = Header::new(Algorithm::HS256);
         let sig = "c0zGLzKEFWj0VxWuufTXiRMk5tlI5MbGDAYhzaxIYjo";
-        let valid = verify(sig, "hello world", b"secret", Algorithm::HS256);
+        let valid = signer.verify(&header, "hello world".as_bytes(), sig).unwrap();
         assert!(valid);
     }
 
@@ -173,10 +152,11 @@ mod tests {
             sub: "b@b.com".to_owned(),
             company: "ACME".to_owned()
         };
+        let signer = MacSigner::new("secret".as_bytes()).unwrap();
         let mut header = Header::default();
         header.kid = Some("kid".to_owned());
-        let token = encode(header, &my_claims, "secret".as_ref()).unwrap();
-        let token_data = decode::<Claims>(&token, "secret".as_ref(), Algorithm::HS256).unwrap();
+        let token = encode(header, &my_claims, &signer).unwrap();
+        let token_data = decode::<Claims, MacSigner>(&token, &signer).unwrap();
         assert_eq!(my_claims, token_data.claims);
         assert_eq!("kid", token_data.header.kid.unwrap());
     }
@@ -187,54 +167,61 @@ mod tests {
             sub: "b@b.com".to_owned(),
             company: "ACME".to_owned()
         };
-        let token = encode(Header::default(), &my_claims, "secret".as_ref()).unwrap();
-        let token_data = decode::<Claims>(&token, "secret".as_ref(), Algorithm::HS256).unwrap();
+        let signer = MacSigner::new("secret".as_bytes()).unwrap();
+        let token = encode(Header::default(), &my_claims, &signer).unwrap();
+        let token_data = decode::<Claims, MacSigner>(&token, &signer).unwrap();
         assert_eq!(my_claims, token_data.claims);
         assert!(token_data.header.kid.is_none());
     }
 
     #[test]
     fn decode_token() {
+        let signer = MacSigner::new("secret".as_bytes()).unwrap();
         let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiQGIuY29tIiwiY29tcGFueSI6IkFDTUUifQ.I1BvFoHe94AFf09O6tDbcSB8-jp8w6xZqmyHIwPeSdY";
-        let claims = decode::<Claims>(token, "secret".as_ref(), Algorithm::HS256);
+        let claims = decode::<Claims, MacSigner>(token, &signer);
         claims.unwrap();
     }
 
     #[test]
     #[should_panic(expected = "InvalidToken")]
     fn decode_token_missing_parts() {
+        let signer = MacSigner::new("secret".as_bytes()).unwrap();
         let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9";
-        let claims = decode::<Claims>(token, "secret".as_ref(), Algorithm::HS256);
+        let claims = decode::<Claims, MacSigner>(token, &signer);
         claims.unwrap();
     }
 
     #[test]
     #[should_panic(expected = "InvalidSignature")]
     fn decode_token_invalid_signature() {
+        let signer = MacSigner::new("secret".as_bytes()).unwrap();
         let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiQGIuY29tIiwiY29tcGFueSI6IkFDTUUifQ.wrong";
-        let claims = decode::<Claims>(token, "secret".as_ref(), Algorithm::HS256);
+        let claims = decode::<Claims, MacSigner>(token, &signer);
         claims.unwrap();
     }
 
     #[test]
-    #[should_panic(expected = "WrongAlgorithmHeader")]
+    #[should_panic(expected = "InvalidSignature")]
     fn decode_token_wrong_algorithm() {
+        let signer = MacSigner::new("secret".as_bytes()).unwrap();
         let token = "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiQGIuY29tIiwiY29tcGFueSI6IkFDTUUifQ.pKscJVk7-aHxfmQKlaZxh5uhuKhGMAa-1F5IX5mfUwI";
-        let claims = decode::<Claims>(token, "secret".as_ref(), Algorithm::HS256);
+        let claims = decode::<Claims, MacSigner>(token, &signer);
         claims.unwrap();
     }
 
     #[test]
     fn decode_token_with_bytes_secret() {
+        let signer = MacSigner::new(b"\x01\x02\x03".as_ref()).unwrap();
         let token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiY29tcGFueSI6Ikdvb2dvbCJ9.27QxgG96vpX4akKNpD1YdRGHE3_u2X35wR3EHA2eCrs";
-        let claims = decode::<Claims>(token, b"\x01\x02\x03", Algorithm::HS256);
+        let claims = decode::<Claims, MacSigner>(token, &signer);
         assert!(claims.is_ok());
     }
 
     #[test]
     fn decode_token_with_shuffled_header_fields() {
+        let signer = MacSigner::new("secret".as_bytes()).unwrap();
         let token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJjb21wYW55IjoiMTIzNDU2Nzg5MCIsInN1YiI6IkpvaG4gRG9lIn0.SEIZ4Jg46VGhquuwPYDLY5qHF8AkQczF14aXM3a2c28";
-        let claims = decode::<Claims>(token, "secret".as_ref(), Algorithm::HS256);
+        let claims = decode::<Claims, MacSigner>(token, &signer);
         assert!(claims.is_ok());
     }
 }
