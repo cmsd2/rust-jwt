@@ -237,7 +237,7 @@ mod test {
         
         let j = Jwt::decode("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE0NjI2NTc2NzksInN1YiI6ImJAYi5jb20ifQ.ukkwOH4BPNgykw7I7RI_hXNj1ZNH4BIErK0xD3tsM1M", &signer).unwrap();
         
-        assert_eq!(j.claims.claims.get("exp"), Some(serde_json::to_value(&1462657679)).as_ref());
-        assert_eq!(j.claims.claims.get("sub"), Some(serde_json::to_value("b@b.com")).as_ref());
+        assert_eq!(j.claims.get_claim("exp").unwrap(), Some(1462657679i64));
+        assert_eq!(j.claims.get_claim("sub").unwrap(), Some("b@b.com".to_string()));
     }
 }
