@@ -4,6 +4,7 @@ use super::*;
 use header::Header;
 use claims::expiry::*;
 use claims::not_before::*;
+use claims::ClaimsMap;
 use result::{JwtError, JwtResult};
 use chrono::*;
 use serde;
@@ -37,13 +38,37 @@ impl Jwt {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct JwtClaims {
-    claims: BTreeMap<String, serde_json::value::Value>,
+    pub claims: BTreeMap<String, serde_json::value::Value>,
 }
 
 impl JwtClaims {
     pub fn new() -> JwtClaims {
         JwtClaims {
             claims: BTreeMap::new(),
+        }
+    }
+}
+
+impl ClaimsMap for JwtClaims {
+    fn add_claim<S: Into<String>, V: serde::Serialize>(&mut self, name: S, value: &V) {
+        self.claims.insert(name.into(), serde_json::value::to_value(value));
+    }
+    
+    fn remove_claim(&mut self, name: &str) -> bool {
+        self.claims.remove(name).is_some()
+    }
+    
+    fn has_claim(&self, name: &str) -> bool {
+        self.claims.contains_key(name)
+    }
+    
+    fn get_claim<C: serde::Deserialize>(&self, name: &str) -> JwtResult<Option<C>> {
+        if let Some(claim) = self.claims.get(name) {
+            let v = try!(serde_json::value::from_value(claim.clone()));
+            
+            Ok(Some(v))
+        } else {
+            Ok(None)
         }
     }
 }
@@ -160,13 +185,14 @@ mod test {
     use claims::expiry::*;
     use claims::not_before::*;
     use claims::time::*;
+    use claims::ClaimsMap;
     use rbvt::validation::*;
     use crypto::mac_signer::MacSigner;
     
     #[test]
     fn test_header_serde() {
         let mut h = JwtClaims::new();
-        h.claims.insert("exp".to_owned(), serde_json::to_value(&UTC::now().timestamp()));
+        h.add_claim("exp", &UTC::now().timestamp());
         
         let h_js = serde_json::to_string(&h).unwrap();
         
@@ -180,8 +206,8 @@ mod test {
         let now = UTC::now();
         
         let mut h = JwtClaims::new();
-        h.claims.insert("exp".to_owned(), serde_json::to_value(&now.timestamp()));
-        h.claims.insert("nbf".to_owned(), serde_json::to_value(&now.timestamp()));
+        h.add_claim("exp", &now.timestamp());
+        h.add_claim("nbf", &now.timestamp());
         
         let mut vs = ValidationSchema::new();
         vs.rule(Box::new(ExpiryVerifier::new(FixedTimeProvider(now))));
@@ -197,8 +223,8 @@ mod test {
         let mut j = Jwt::new();
         let signer = MacSigner::new("secret".as_bytes()).unwrap();
         
-        j.claims.claims.insert("exp".to_owned(), serde_json::to_value(&now.timestamp()));
-        j.claims.claims.insert("sub".to_owned(), serde_json::to_value("b@b.com"));
+        j.claims.add_claim("exp", &now.timestamp());
+        j.claims.add_claim("sub", &"b@b.com");
 
         let s = j.encode(&signer).unwrap();
 
