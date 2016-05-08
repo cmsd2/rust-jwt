@@ -8,7 +8,7 @@ use std::collections::HashMap;
 /// A basic JWT header part, the alg defaults to HS256 and typ is automatically
 /// set to `JWT`. All the other fields are optional
 pub struct Header {
-    typ: String,
+    typ: Option<String>,
     pub alg: Algorithm,
     pub jku: Option<String>, // jwk key set url
     pub jwk: Option<String>, // json web key
@@ -25,7 +25,7 @@ pub struct Header {
 impl Header {
     pub fn new(algorithm: Algorithm) -> Header {
         Header {
-            typ: "JWT".to_owned(),
+            typ: Some("JWT".to_owned()),
             alg: algorithm,
             jku: None,
             jwk: None,
@@ -61,7 +61,10 @@ impl<'a> serde::ser::MapVisitor for HeaderSerVisitor<'a> {
     fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
         where S: serde::Serializer
     {
-        try!(serializer.serialize_struct_elt("typ", &self.0.typ));
+        if self.0.typ.is_some() {
+            try!(serializer.serialize_struct_elt("typ", &self.0.typ));
+        }
+        
         try!(serializer.serialize_struct_elt("alg", &self.0.alg));
         
         if self.0.jku.is_some() {
@@ -168,11 +171,6 @@ impl serde::de::Visitor for HeaderDeVisitor {
         let alg = match alg {
             Some(alg) => alg,
             None => try!(visitor.missing_field("alg")),
-        };
-        
-        let typ = match typ {
-            Some(typ) => typ,
-            None => try!(visitor.missing_field("typ")),
         };
 
         try!(visitor.end());
