@@ -12,6 +12,19 @@ use super::*;
 use key_type::*;
 use result::*;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct JwkSet {
+    pub keys: Vec<Jwk>,
+}
+
+impl JwkSet {
+    pub fn new() -> JwkSet {
+        JwkSet {
+            keys: vec![],
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Jwk {
     pub kty: KeyType,
