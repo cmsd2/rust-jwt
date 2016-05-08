@@ -1,5 +1,5 @@
-use std::collections::HashMap;
-use std::result;
+use std::collections::BTreeMap;
+use std;
 
 use rustc_serialize::base64::FromBase64;
 use serde;
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serializer, Deserializer};
 use serde_json;
 use openssl::bn::BigNum;
 use bignum::*;
-use super::Part;
+use super::*;
 
 use key_type::*;
 use result::*;
@@ -15,31 +15,33 @@ use result::*;
 #[derive(Clone, Debug)]
 pub struct Jwk {
     pub kty: KeyType,
-    pub params: HashMap<String, serde_json::value::Value>,    
+    pub params: BTreeMap<String, serde_json::value::Value>,    
 }
 
 impl Jwk {
-    pub fn get_param<'a>(&'a self, name: &str) -> JwtResult<&'a serde_json::value::Value> {
-        self.params.get(name).ok_or(JwtError::MissingKeyParam(name.to_owned()))
-    }
-    
-    pub fn set_param<T: Into<String>>(&mut self, name: T, value: serde_json::value::Value) -> () {
-        self.params.insert(name.into(), value);
-    }
-    
     pub fn get_bignum_param(&self, name: &str) -> JwtResult<BigNum> {   
-        let b64 = try!(self.get_param(name));
+        let maybe_b64 = try!(self.get_value::<String>(name));
         
-        let b64s = try!(b64.as_string().ok_or(JwtError::InvalidKeyParam(name.to_owned())));
-        
+        let b64s = try!(maybe_b64.ok_or(JwtError::InvalidKeyParam(name.to_owned())));
+
         let bn = try!(BigNumComponent::from_base64(b64s));
         
         Ok(bn.into())
     }
 }
 
+impl JsonValueMap for Jwk {
+    fn values<'a>(&'a self) -> &'a BTreeMap<String, serde_json::value::Value> {
+        &self.params
+    }
+    
+    fn values_mut<'a>(&'a mut self) -> &'a mut BTreeMap<String, serde_json::value::Value> {
+        &mut self.params
+    }
+}
+
 impl serde::Serialize for Jwk {
-    fn serialize<S>(&self, serializer: &mut S) -> result::Result<(), S::Error>
+    fn serialize<S>(&self, serializer: &mut S) -> std::result::Result<(), S::Error>
         where S: serde::Serializer,
     {
         serializer.serialize_map(JwkSerVisitor::new(self))
@@ -59,7 +61,7 @@ impl <'a> JwkSerVisitor<'a> {
 }
 
 impl <'a> serde::ser::MapVisitor for JwkSerVisitor<'a> {
-    fn visit<S>(&mut self, serializer: &mut S) -> result::Result<Option<()>, S::Error> where S: Serializer {
+    fn visit<S>(&mut self, serializer: &mut S) -> std::result::Result<Option<()>, S::Error> where S: Serializer {
         try!(serializer.serialize_struct_elt("kty", self.jwk.kty));
         
         for (k,v) in &self.jwk.params {
@@ -75,7 +77,7 @@ impl <'a> serde::ser::MapVisitor for JwkSerVisitor<'a> {
 }
 
 impl serde::de::Deserialize for Jwk {
-    fn deserialize<D>(deserializer: &mut D) -> result::Result<Jwk, D::Error>
+    fn deserialize<D>(deserializer: &mut D) -> std::result::Result<Jwk, D::Error>
         where D: serde::de::Deserializer
     {
         deserializer.deserialize(JwkVisitor)
@@ -87,11 +89,11 @@ pub struct JwkVisitor;
 impl serde::de::Visitor for JwkVisitor {
     type Value = Jwk;
     
-    fn visit_map<V>(&mut self, mut visitor: V) -> result::Result<Jwk, V::Error>
+    fn visit_map<V>(&mut self, mut visitor: V) -> std::result::Result<Jwk, V::Error>
         where V: serde::de::MapVisitor
     {
         let mut kty = None;
-        let mut custom_params = HashMap::<String, serde_json::value::Value>::new();
+        let mut custom_params = BTreeMap::<String, serde_json::value::Value>::new();
 
         loop {
             if let Some(key) = try!(visitor.visit_key::<String>()) {
