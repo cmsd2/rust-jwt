@@ -8,7 +8,7 @@ use std::collections::HashMap;
 /// A basic JWT header part, the alg defaults to HS256 and typ is automatically
 /// set to `JWT`. All the other fields are optional
 pub struct Header {
-    typ: Option<String>,
+    pub typ: Option<String>,
     pub alg: Algorithm,
     pub jku: Option<String>, // jwk key set url
     pub jwk: Option<String>, // json web key
