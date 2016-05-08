@@ -27,7 +27,7 @@ impl<C: ExpiryClaim, T: SkewedTimeProvider> ExpiryVerifier<C, T> {
 }
 
 impl<C: ExpiryClaim, T: SkewedTimeProvider> Rule<C, ValidationState> for ExpiryVerifier<C, T> {
-    fn validate(&self, c: &C, state: &mut ValidationState) -> rbvt::result::Result<()> {
+    fn validate(&self, c: &C, state: &mut ValidationState) -> rbvt::result::ValidationResult<()> {
         let now_plus_a_bit = try!(self.time_provider.now_utc_minus_a_bit().map_err(|e| ValidationError::Error(Arc::new(Box::new(e)))));
     
         if let Some(expiry) = try!(c.get_expiry_time().map_err(|e| ValidationError::Error(Arc::new(Box::new(e))))) {

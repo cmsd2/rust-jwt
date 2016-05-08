@@ -27,7 +27,7 @@ impl<C: NotBeforeClaim, T: SkewedTimeProvider> NotBeforeVerifier<C, T> {
 }
 
 impl<C: NotBeforeClaim, T: SkewedTimeProvider> Rule<C, ValidationState> for NotBeforeVerifier<C, T> {
-    fn validate(&self, c: &C, state: &mut ValidationState) -> rbvt::result::Result<()> {
+    fn validate(&self, c: &C, state: &mut ValidationState) -> rbvt::result::ValidationResult<()> {
         let now_plus_a_bit = try!(self.time_provider.now_utc_plus_a_bit().map_err(|e| ValidationError::Error(Arc::new(Box::new(e)))));
     
         if let Some(not_before_time) = try!(c.get_not_before_time().map_err(|e| ValidationError::Error(Arc::new(Box::new(e))))) {
