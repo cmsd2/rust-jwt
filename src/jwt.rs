@@ -12,6 +12,7 @@ use serde_json;
 use cast;
 use signer::Signer;
 use verifier::Verifier;
+use json::*;
 
 pub type Jwt = TokenData<JwtClaims>;
 
