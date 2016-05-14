@@ -171,7 +171,7 @@ impl serde::de::Visitor for JwtClaimsDeVisitor {
 
 #[cfg(test)]
 mod test {
-    use ::JsonValueMapAccessors;
+    use json::*;
     use super::*;
     use serde_json;
     use chrono::*;
@@ -212,7 +212,7 @@ mod test {
     fn test_jwt_encode() {
         let now = UTC.timestamp(1462657679, 0);
         
-        let mut j = Jwt::new();
+        let mut j = Jwt::default();
         let signer = MacSigner::new("secret".as_bytes()).unwrap();
         
         j.claims.set_value("exp", &now.timestamp());
