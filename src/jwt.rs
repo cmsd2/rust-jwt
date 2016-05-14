@@ -17,10 +17,10 @@ use json::*;
 pub type Jwt = TokenData<JwtClaims>;
 
 impl Jwt {
-    pub fn new() -> Jwt {
+    pub fn new(header: Header, claims: JwtClaims) -> Jwt {
         Jwt {
-            header: Header::default(),
-            claims: JwtClaims::new(),
+            header: header,
+            claims: claims,
         }
     }
     
@@ -34,6 +34,12 @@ impl Jwt {
         ::decode(token, verifier)
     }
 
+}
+
+impl Default for Jwt {
+    fn default() -> Jwt {
+        Jwt::new(Header::default(), JwtClaims::new())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
