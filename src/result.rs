@@ -8,6 +8,7 @@ use rustc_serialize;
 use openssl;
 use chrono;
 use cast;
+use rbvt::result::*;
 
 use algorithm::Algorithm;
 
@@ -125,6 +126,13 @@ quick_error! {
             from()
             description("numeric conversion error")
             display("numeric conversion error: {:?}", e)
+        }
+        
+        ValidationError(e: ValidationError) {
+            from()
+            description("validation error")
+            display("validation error: {}", e)
+            cause(e)
         }
     }
 }

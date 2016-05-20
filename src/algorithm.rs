@@ -1,6 +1,7 @@
 use std::result::Result as CoreResult;
 use std::fmt;
 use serde;
+use result::{JwtResult, JwtError};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Algorithm {
@@ -50,6 +51,32 @@ impl fmt::Display for Algorithm {
             Algorithm::PS256 => write!(f, "PS256"),
             Algorithm::PS384 => write!(f, "PS384"),
             Algorithm::PS512 => write!(f, "PS512"),
+        }
+    }
+}
+
+impl Algorithm {
+    pub fn from_str(s: &str) -> JwtResult<Algorithm> {
+        match s {
+            "none" => Ok(Algorithm::None),
+            
+            "HS256" => Ok(Algorithm::HS256),
+            "HS384" => Ok(Algorithm::HS384),
+            "HS512" => Ok(Algorithm::HS512),
+            
+            "RS256" => Ok(Algorithm::RS256),
+            "RS384" => Ok(Algorithm::RS384),
+            "RS512" => Ok(Algorithm::RS512),
+            
+            "ES256" => Ok(Algorithm::ES256),
+            "ES384" => Ok(Algorithm::ES384),
+            "ES512" => Ok(Algorithm::ES512),
+            
+            "PS256" => Ok(Algorithm::PS256),
+            "PS384" => Ok(Algorithm::PS384),
+            "PS512" => Ok(Algorithm::PS512),
+            
+            _ => Err(JwtError::BadArgument(format!("unknown algorithm: {}", s)))
         }
     }
 }

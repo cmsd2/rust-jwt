@@ -1,11 +1,20 @@
 use jwk::*;
 use result::*;
 use openssl::crypto::rsa::RSA;
+use openssl::nid::Nid;
+use rust_crypto::digest::Digest;
+use rust_crypto::sha2::{Sha256, Sha384, Sha512};
+use rustc_serialize::base64::*;
+use algorithm::*;
+use signer::*;
+use header::*;
 
 pub trait RsaKey {
     fn public_key(&self) -> JwtResult<RSA>;
     
     fn private_key(&self) -> JwtResult<RSA>;
+    
+    fn is_private_key(&self) -> bool;
 }
 
 impl RsaKey for Jwk {
@@ -28,6 +37,57 @@ impl RsaKey for Jwk {
         
         RSA::from_private_components(n, e, d, p, q, dp, dq, qi).map_err(JwtError::from)
     }
+    
+    fn is_private_key(&self) -> bool {
+        self.params.contains_key("d")
+    } 
+}
+
+#[derive(Clone, Debug)]
+pub struct RsaSigner {
+    private_key: Jwk,
+    algorithms: Vec<Algorithm>
+}
+
+impl RsaSigner {
+    pub fn new(private_key: Jwk) -> RsaSigner {
+        RsaSigner {
+            algorithms: compatible_algorithms(),
+            private_key: private_key,
+        }
+    }
+    
+    fn sign_with_digest<D: Digest>(mut d: D, nid: Nid, private_key: &Jwk, input: &[u8]) -> JwtResult<Vec<u8>> {
+        let mut hash = vec![0;d.output_bytes()];
+                
+        d.input(&input);
+        d.result(&mut hash);
+        
+        let rsa = try!(private_key.private_key());
+        
+        rsa.sign(nid, &hash).map_err(From::from)
+    }
+}
+
+impl Signer for RsaSigner {
+    fn sign(&self, header: &Header, signing_input: &[u8]) -> JwtResult<String> {
+        let result = try!(match header.alg {
+            Algorithm::RS256 => Self::sign_with_digest(Sha256::new(), Nid::SHA256, &self.private_key, signing_input),
+            Algorithm::RS384 => Self::sign_with_digest(Sha384::new(), Nid::SHA256, &self.private_key, signing_input),
+            Algorithm::RS512 => Self::sign_with_digest(Sha512::new(), Nid::SHA256, &self.private_key, signing_input),
+            _ => Err(JwtError::InvalidAlgorithm("algorithm is not a supported mac: ".to_owned(), header.alg))
+        });
+        
+        Ok(result.to_base64(URL_SAFE))
+    }
+    
+    fn has_algorithm(&self, a: Algorithm) -> bool {
+        self.algorithms.contains(&a)
+    }
+}
+
+pub fn compatible_algorithms() -> Vec<Algorithm> {
+    vec![Algorithm::RS256, Algorithm::RS384, Algorithm::RS512]
 }
 
 #[cfg(test)]
