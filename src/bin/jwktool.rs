@@ -73,6 +73,12 @@ pub fn cli() -> JwtResult<()> {
                         .takes_value(false)
                         .help("output the public key")
                         )
+                    .arg(Arg::with_name("pubin")
+                        .long("pubin")
+                        .required(false)
+                        .takes_value(false)
+                        .help("input is a public key")
+                        )
                     .arg(Arg::with_name("out")
                         .long("out")
                         .required(false)
@@ -176,11 +182,19 @@ pub fn convert(args: &ArgMatches) -> JwtResult<()> {
     let format = args.value_of("format").unwrap_or("jwk");
     
     if let Some(pem) = args.value_of("pem") {
-        let rsa: RSA = load_public_pem(&PathBuf::from(pem)).unwrap();
+        let rsa: RSA = if args.is_present("pubin") {
+            load_public_pem(&PathBuf::from(pem)).unwrap()
+        } else {
+            load_private_pem(&PathBuf::from(pem)).unwrap()
+        };
         
         match format {
             "jwk" => {
-                let jwk = convert_private_pem_to_jwk(rsa).unwrap();
+                let jwk = if args.is_present("pubin") {
+                    convert_public_pem_to_jwk(rsa).unwrap()
+                } else {
+                    convert_private_pem_to_jwk(rsa).unwrap()
+                };
             
                 let jwk_json = serde_json::to_string(&jwk).unwrap();
                 
