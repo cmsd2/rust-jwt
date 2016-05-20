@@ -32,6 +32,13 @@ pub struct Jwk {
 }
 
 impl Jwk {
+    pub fn new(kty: KeyType) -> Jwk {
+        Jwk {
+            kty: kty,
+            params: BTreeMap::new(),
+        }
+    }
+    
     pub fn get_bignum_param(&self, name: &str) -> JwtResult<BigNum> {   
         let maybe_b64 = try!(self.get_value::<String>(name));
         

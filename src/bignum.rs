@@ -4,7 +4,7 @@ use super::Part;
 use result::JwtResult;
 use rustc_serialize::base64::*;
 
-pub struct BigNumComponent(BigNum);
+pub struct BigNumComponent(pub BigNum);
 
 impl Deref for BigNumComponent {
     type Target = BigNum;
