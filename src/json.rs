@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
+use std::io::Read;
 use serde_json;
 use serde;
-use result::JwtResult;
+use result::{JwtError, JwtResult};
 
 pub trait JsonValueMap {
     fn values<'a>(&'a self) -> &'a BTreeMap<String, serde_json::value::Value>;
@@ -48,3 +49,18 @@ impl <M> JsonValueMapAccessors for M where M: JsonValueMap {
         }
     }
 }
+
+pub trait JsonReader {
+    fn read_json<T>(&mut self) -> JwtResult<T> where T: serde::Deserialize;
+}
+
+impl <R> JsonReader for R where R: Read {
+    fn read_json<T>(&mut self) -> JwtResult<T> where T: serde::Deserialize {
+        let mut s = String::new();
+        
+        try!(self.read_to_string(&mut s).map_err(JwtError::from));
+        
+        serde_json::de::from_str::<T>(&s).map_err(JwtError::from)
+    }
+}
+ 

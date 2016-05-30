@@ -93,7 +93,7 @@ pub fn compatible_algorithms() -> Vec<Algorithm> {
 #[cfg(test)]
 mod test {
     use std::fs::File;
-    use std::io::{Read, Write};
+    use std::io::Write;
     use serde_json;
     use serde;
     use rust_crypto::sha2::Sha256;
@@ -101,19 +101,13 @@ mod test {
     use openssl;
     
     use jwk::*;
+    use json::*;
     use super::*;
     
-    pub fn read_file(name: &str) -> String {
-        let mut f = File::open(name).unwrap();
-        let mut s = String::new();
-        f.read_to_string(&mut s).unwrap();
-        s
-    }
-    
     pub fn load_json<T: serde::Deserialize>(file_name: &str) -> T {
-        let s = read_file(file_name);
+        let mut f = File::open(file_name).unwrap();
         
-        serde_json::de::from_str::<T>(&s).unwrap()
+        f.read_json().unwrap()
     }
     
     #[test]
