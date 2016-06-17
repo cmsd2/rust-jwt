@@ -1,4 +1,4 @@
-use rbvt::validation::*;
+use validation::*;
 
 pub mod time;
 pub mod expiry;
@@ -17,7 +17,7 @@ pub fn claims_verifier<C>() -> ValidationSchema<C> where C: expiry::ExpiryClaim 
 mod test {
     use super::*;
     use jwt::*;
-    use rbvt::validation::*;
+    use validation::*;
     
     #[test]
     fn simple_verify_should_compile_and_not_panic() {

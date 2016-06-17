@@ -27,7 +27,6 @@ serde_macros = "0.7.5"
 log = "0.3.6"
 chrono = "0.2.22"
 time = "0.1.35"
-rbvt = {git = "https://github.com/cmsd2/rbvt.git"}
 cast = "0.1.0"
 clap = "2.5.1"
 

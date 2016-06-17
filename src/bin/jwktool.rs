@@ -1,5 +1,4 @@
 extern crate openssl;
-extern crate rbvt;
 extern crate jsonwebtoken;
 extern crate serde_json;
 extern crate clap;
@@ -22,8 +21,7 @@ use jsonwebtoken::verifier::*;
 use jsonwebtoken::crypto::rsa::*;
 use jsonwebtoken::jwt::*;
 use jsonwebtoken::result::*;
-use rbvt::state::*;
-use rbvt::result::*;
+use jsonwebtoken::validation::*;
 use clap::{Arg, ArgMatches, App, SubCommand};
 use rustc_serialize::base64::ToBase64;
 
@@ -45,6 +43,32 @@ pub fn cli() -> JwtResult<()> {
         .version("1.0")
         .author("Chris Dawes <cmsd2@cantab.net>")
         .about("Convert pem to jwk and back")
+        /*.subcommand(SubCommand::with_name("keyset")
+                    .about("Manages JWK Set files")
+                    .author("Chris Dawes <cmsd2@cantab.net>")
+                    .version("1.0")
+                    .subcommand(SubCommand::with_name("add")
+                                .about("Adds a key to a keyset file")
+                                .author("Chris Dawes <cmsd2@cantab.net>")
+                                .version("1.0")
+                                .arg(Arg::with_name("pem")
+                                    .short("p")
+                                    .required(false)
+                                    .takes_value(true)
+                                    .help("name of private? key pem to add")
+                                )
+                                .arg(Arg::with_name("jwk")
+                                    .short("j")
+                                    .required(false)
+                                    .takes_value(true)
+                                    .help("name of jwk private? key file to add")
+                                )
+                    )
+                    // list key IDs
+                    // remove by key ID
+                    // new keyset file
+                    // get key by key ID
+        )*/
         .subcommand(SubCommand::with_name("convert")
                     .about("Converts pem keys to jwk files and back again")
                     .author("Chris Dawes <cmsd2@cantab.net>")

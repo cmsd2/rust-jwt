@@ -178,7 +178,7 @@ mod test {
     use claims::expiry::*;
     use claims::not_before::*;
     use claims::time::*;
-    use rbvt::validation::*;
+    use validation::*;
     use crypto::mac_signer::MacSigner;
     
     #[test]

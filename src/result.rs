@@ -8,7 +8,7 @@ use rustc_serialize;
 use openssl;
 use chrono;
 use cast;
-use rbvt::result::*;
+use validation::*;
 
 use algorithm::Algorithm;
 

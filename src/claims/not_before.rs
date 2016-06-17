@@ -3,10 +3,7 @@ use std::marker::PhantomData;
 use chrono::*;
 use super::time::*;
 use result::JwtResult;
-use rbvt::result::ValidationError;
-use rbvt::validation::*;
-use rbvt::state::*;
-use rbvt;
+use validation::*;
 
 pub trait NotBeforeClaim {
     fn get_not_before_time(&self) -> JwtResult<Option<DateTime<UTC>>>;
@@ -27,7 +24,7 @@ impl<C: NotBeforeClaim, T: SkewedTimeProvider> NotBeforeVerifier<C, T> {
 }
 
 impl<C: NotBeforeClaim, T: SkewedTimeProvider> Rule<C, ValidationState> for NotBeforeVerifier<C, T> {
-    fn validate(&self, c: &C, state: &mut ValidationState) -> rbvt::result::ValidationResult<()> {
+    fn validate(&self, c: &C, state: &mut ValidationState) -> ValidationResult<()> {
         let now_plus_a_bit = try!(self.time_provider.now_utc_plus_a_bit().map_err(|e| ValidationError::Error(Arc::new(Box::new(e)))));
     
         if let Some(not_before_time) = try!(c.get_not_before_time().map_err(|e| ValidationError::Error(Arc::new(Box::new(e))))) {
@@ -42,7 +39,7 @@ impl<C: NotBeforeClaim, T: SkewedTimeProvider> Rule<C, ValidationState> for NotB
 
 #[cfg(test)]
 mod test {
-    use rbvt::validation::*;
+    use validation::*;
     use claims::time::*;
     use chrono::*;
     use result::JwtResult;

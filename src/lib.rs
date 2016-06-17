@@ -17,7 +17,6 @@ extern crate openssl;
 #[macro_use] extern crate log;
 extern crate chrono;
 extern crate time;
-extern crate rbvt;
 extern crate cast;
 
 use rustc_serialize::base64::{self, ToBase64, FromBase64};
@@ -35,6 +34,7 @@ pub mod bignum;
 pub mod claims;
 pub mod jwt;
 pub mod json;
+pub mod validation;
 
 use header::*;
 use result::*;
