@@ -47,13 +47,13 @@ impl RsaParameters for RSA {
     }
 }
 
-pub trait RsaJwk {
+pub trait RsaKey {
     fn convert_private_pem_to_jwk(self) -> JwtResult<Jwk>;
 
     fn convert_public_pem_to_jwk(self) -> JwtResult<Jwk>;
 }
 
-impl RsaJwk for RSA {
+impl RsaKey for RSA {
     fn convert_private_pem_to_jwk(self) -> JwtResult<Jwk> {
         let mut vs = ValidationState::new();
     
@@ -131,7 +131,7 @@ impl RsaJwk for RSA {
     }
 }
 
-pub trait RsaKey {
+pub trait RsaJwk {
     fn public_key(&self) -> JwtResult<RSA>;
     
     fn private_key(&self) -> JwtResult<RSA>;
@@ -139,7 +139,7 @@ pub trait RsaKey {
     fn is_private_key(&self) -> bool;
 }
 
-impl RsaKey for Jwk {
+impl RsaJwk for Jwk {
     fn public_key(&self) -> JwtResult<RSA> {
         let n = try!(self.get_bignum_param("n"));
         let e = try!(self.get_bignum_param("e"));        
@@ -216,7 +216,6 @@ pub fn compatible_algorithms() -> Vec<Algorithm> {
 mod test {
     use std::fs::File;
     use std::io::Write;
-    use serde_json;
     use serde;
     use rust_crypto::sha2::Sha256;
     use rust_crypto::digest::Digest;
