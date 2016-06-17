@@ -7,7 +7,7 @@ readme = "README.md"
 description = "Create and parse JWT in a strongly typed way."
 homepage = "https://github.com/Keats/rust-jwt"
 repository = "https://github.com/Keats/rust-jwt"
-keywords = ["jwt", "web", "api", "token", "json"]
+keywords = ["jwt", "web", "api", "token", "json", "jws", "jwk", "jose"]
 
 [replace]
 "openssl:0.7.11" = {git = "https://github.com/sfackler/rust-openssl.git", commit = "dce59a63" }
