@@ -2,12 +2,134 @@ use jwk::*;
 use result::*;
 use openssl::crypto::rsa::RSA;
 use openssl::nid::Nid;
+use openssl::bn::BigNum;
 use rust_crypto::digest::Digest;
 use rust_crypto::sha2::{Sha256, Sha384, Sha512};
 use rustc_serialize::base64::*;
 use algorithm::*;
 use signer::*;
 use header::*;
+use validation::*;
+use json::*;
+use key_type::*;
+use bignum::*;
+
+pub fn bn_to_b64(bn: BigNum) -> JwtResult<String> {
+    use Part;
+
+    let component = BigNumComponent(bn);
+    component.to_base64().map_err(From::from)
+}
+
+pub trait RsaParameters {
+    fn dp(&self) -> JwtResult<BigNum>;
+    fn dq(&self) -> JwtResult<BigNum>;
+    fn qi(&self) -> JwtResult<BigNum>;
+}
+
+impl RsaParameters for RSA {
+    fn dp(&self) -> JwtResult<BigNum> {
+        unsafe {
+            BigNum::new_from_ffi((*self.as_ptr()).dmp1)
+        }.map_err(From::from)
+    }
+
+    fn dq(&self) -> JwtResult<BigNum> {
+        unsafe {
+            BigNum::new_from_ffi((*self.as_ptr()).dmq1)
+        }.map_err(From::from)
+    }
+
+    fn qi(&self) -> JwtResult<BigNum> {
+        unsafe {
+            BigNum::new_from_ffi((*self.as_ptr()).iqmp)
+        }.map_err(From::from)
+    }
+}
+
+pub trait RsaJwk {
+    fn convert_private_pem_to_jwk(self) -> JwtResult<Jwk>;
+
+    fn convert_public_pem_to_jwk(self) -> JwtResult<Jwk>;
+}
+
+impl RsaJwk for RSA {
+    fn convert_private_pem_to_jwk(self) -> JwtResult<Jwk> {
+        let mut vs = ValidationState::new();
+    
+        if !self.has_n() {
+            vs.reject("n", ValidationError::MissingRequiredValue("n".to_owned()));
+        }
+    
+        if !self.has_e() {
+            vs.reject("e", ValidationError::MissingRequiredValue("e".to_owned()));
+        }
+    
+        if vs.valid {
+            let mut jwk = Jwk::new(KeyType::RSA);
+        
+            let n = try!(self.n());
+            jwk.set_value("n", &try!(bn_to_b64(n)));
+        
+            let e = try!(self.e());
+            jwk.set_value("e", &try!(bn_to_b64(e)));
+        
+            let d = try!(self.d());
+            jwk.set_value("d", &try!(bn_to_b64(d)));
+        
+            let p = try!(self.p());
+            jwk.set_value("p", &try!(bn_to_b64(p)));
+        
+            let q = try!(self.q());
+            jwk.set_value("q", &try!(bn_to_b64(q)));
+        
+            let dp = try!(self.dp());
+            jwk.set_value("dp", &try!(bn_to_b64(dp)));
+        
+            let dq = try!(self.dq());
+            jwk.set_value("dq", &try!(bn_to_b64(dq)));
+        
+            let qi = try!(self.qi());
+            jwk.set_value("qi", &try!(bn_to_b64(qi)));
+        
+            Ok(jwk)
+        } else {
+            Err(From::from(ValidationError::ValidationError(vs)))
+        }
+    }
+
+    fn convert_public_pem_to_jwk(self) -> JwtResult<Jwk> {
+        use Part;
+
+        let mut vs = ValidationState::new();
+
+        if !self.has_n() {
+            vs.reject("n", ValidationError::MissingRequiredValue("n".to_owned()));
+        }
+    
+        if !self.has_e() {
+            vs.reject("e", ValidationError::MissingRequiredValue("e".to_owned()));
+        }
+    
+        if vs.valid {
+            let mut jwk = Jwk::new(KeyType::RSA);
+        
+            let n = try!(self.n());
+            let n_bn = BigNumComponent(n);
+            let n_b64 = try!(n_bn.to_base64());
+            jwk.set_value("n", &n_b64);
+        
+            let e = try!(self.e());
+            let e_bn = BigNumComponent(e);
+            let e_b64 = try!(e_bn.to_base64());
+            jwk.set_value("e", &e_b64);
+        
+            Ok(jwk)
+        } else {
+            Err(From::from(ValidationError::ValidationError(vs)))
+        }
+    }
+}
 
 pub trait RsaKey {
     fn public_key(&self) -> JwtResult<RSA>;

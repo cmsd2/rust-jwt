@@ -5,15 +5,10 @@ extern crate clap;
 extern crate rustc_serialize;
 
 use openssl::crypto::rsa::RSA;
-use openssl::bn::BigNum;
 use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::io::{Read, Write};
-use jsonwebtoken::Part;
-use jsonwebtoken::bignum::*;
-use jsonwebtoken::json::*;
 use jsonwebtoken::jwk::*;
-use jsonwebtoken::key_type::*;
 use jsonwebtoken::algorithm::*;
 use jsonwebtoken::header::Header;
 use jsonwebtoken::signer::*;
@@ -21,9 +16,7 @@ use jsonwebtoken::verifier::*;
 use jsonwebtoken::crypto::rsa::*;
 use jsonwebtoken::jwt::*;
 use jsonwebtoken::result::*;
-use jsonwebtoken::validation::*;
 use clap::{Arg, ArgMatches, App, SubCommand};
-use rustc_serialize::base64::ToBase64;
 
 pub fn main() {
     // convert public key pem to jwk
@@ -215,9 +208,9 @@ pub fn convert(args: &ArgMatches) -> JwtResult<()> {
         match format {
             "jwk" => {
                 let jwk = if args.is_present("pubin") {
-                    convert_public_pem_to_jwk(rsa).unwrap()
+                    rsa.convert_public_pem_to_jwk().unwrap()
                 } else {
-                    convert_private_pem_to_jwk(rsa).unwrap()
+                    rsa.convert_private_pem_to_jwk().unwrap()
                 };
             
                 let jwk_json = serde_json::to_string(&jwk).unwrap();
@@ -285,7 +278,7 @@ pub fn sign(args: &ArgMatches) -> JwtResult<()> {
     if let Some(pem) = args.value_of("pem") {
         let rsa = try!(load_private_pem(&PathBuf::from(pem)));
         
-        jwk = Some(try!(convert_private_pem_to_jwk(rsa)));
+        jwk = Some(try!(rsa.convert_private_pem_to_jwk()));
     } else if let Some(jwkfile) = args.value_of("jwk") {
         jwk = Some(try!(load_jwk(&PathBuf::from(jwkfile))));
     }
@@ -315,7 +308,7 @@ pub fn verify(args: &ArgMatches) -> JwtResult<()> {
     if let Some(pem) = args.value_of("pem") {
         let rsa = try!(load_private_pem(&PathBuf::from(pem)));
         
-        jwk = Some(try!(convert_private_pem_to_jwk(rsa)));
+        jwk = Some(try!(rsa.convert_private_pem_to_jwk()));
     } else if let Some(jwkfile) = args.value_of("jwk") {
         jwk = Some(try!(load_jwk(&PathBuf::from(jwkfile))));
     }
@@ -361,103 +354,6 @@ pub fn print_sig(args: &ArgMatches, msg: &str, sig: &str) {
         _ => {
             unimplemented!()
         }
-    }
-}
-
-pub fn convert_public_pem_to_jwk(rsa: RSA) -> JwtResult<Jwk> {    
-    let mut vs = ValidationState::new();
-    
-    if !rsa.has_n() {
-        vs.reject("n", ValidationError::MissingRequiredValue("n".to_owned()));
-    }
-    
-    if !rsa.has_e() {
-        vs.reject("e", ValidationError::MissingRequiredValue("e".to_owned()));
-    }
-    
-    if vs.valid {
-        let mut jwk = Jwk::new(KeyType::RSA);
-        
-        let n = try!(rsa.n());
-        let n_bn = BigNumComponent(n);
-        let n_b64 = try!(n_bn.to_base64());
-        jwk.set_value("n", &n_b64);
-        
-        let e = try!(rsa.e());
-        let e_bn = BigNumComponent(e);
-        let e_b64 = try!(e_bn.to_base64());
-        jwk.set_value("e", &e_b64);
-        
-        Ok(jwk)
-    } else {
-        Err(From::from(ValidationError::ValidationError(vs)))
-    }
-}
-
-pub fn bn_to_b64(bn: BigNum) -> JwtResult<String> {
-    let component = BigNumComponent(bn);
-    component.to_base64().map_err(From::from)
-}
-
-pub fn get_dp(rsa: &RSA) -> JwtResult<BigNum> {
-    unsafe {
-        BigNum::new_from_ffi((*rsa.as_ptr()).dmp1)
-    }.map_err(From::from)
-}
-
-pub fn get_dq(rsa: &RSA) -> JwtResult<BigNum> {
-    unsafe {
-        BigNum::new_from_ffi((*rsa.as_ptr()).dmq1)
-    }.map_err(From::from)
-}
-
-pub fn get_qi(rsa: &RSA) -> JwtResult<BigNum> {
-    unsafe {
-        BigNum::new_from_ffi((*rsa.as_ptr()).iqmp)
-    }.map_err(From::from)
-}
-
-pub fn convert_private_pem_to_jwk(rsa: RSA) -> JwtResult<Jwk> {
-    let mut vs = ValidationState::new();
-    
-    if !rsa.has_n() {
-        vs.reject("n", ValidationError::MissingRequiredValue("n".to_owned()));
-    }
-    
-    if !rsa.has_e() {
-        vs.reject("e", ValidationError::MissingRequiredValue("e".to_owned()));
-    }
-    
-    if vs.valid {
-        let mut jwk = Jwk::new(KeyType::RSA);
-        
-        let n = try!(rsa.n());
-        jwk.set_value("n", &try!(bn_to_b64(n)));
-        
-        let e = try!(rsa.e());
-        jwk.set_value("e", &try!(bn_to_b64(e)));
-        
-        let d = try!(rsa.d());
-        jwk.set_value("d", &try!(bn_to_b64(d)));
-        
-        let p = try!(rsa.p());
-        jwk.set_value("p", &try!(bn_to_b64(p)));
-        
-        let q = try!(rsa.q());
-        jwk.set_value("q", &try!(bn_to_b64(q)));
-        
-        let dp = try!(get_dp(&rsa));
-        jwk.set_value("dp", &try!(bn_to_b64(dp)));
-        
-        let dq = try!(get_dq(&rsa));
-        jwk.set_value("dq", &try!(bn_to_b64(dq)));
-        
-        let qi = try!(get_qi(&rsa));
-        jwk.set_value("qi", &try!(bn_to_b64(qi)));
-        
-        Ok(jwk)
-    } else {
-        Err(From::from(ValidationError::ValidationError(vs)))
     }
 }
 
