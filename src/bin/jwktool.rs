@@ -239,17 +239,16 @@ pub fn convert(args: &ArgMatches) -> JwtResult<()> {
                 }
             },
             "pem" => {
-                let mut out = vec![];
-                
-                if jwk.is_private_key() && !args.is_present("pubout") {
-                    let rsa = try!(jwk.private_key());
-                    
-                    try!(rsa.private_key_to_pem(&mut out)); 
-                } else {
-                    let rsa = try!(jwk.public_key());
-                    
-                    try!(rsa.public_key_to_pem(&mut out));
-                }
+                let out =           
+                    if jwk.is_private_key() && !args.is_present("pubout") {
+                        let rsa = try!(jwk.private_key());
+                        
+                        try!(rsa.private_key_to_pem())
+                    } else {
+                        let rsa = try!(jwk.public_key());
+                        
+                        try!(rsa.public_key_to_pem())
+                    };
                 
                 if let Some(outfile) = args.value_of("out") {
                     let mut f = try!(File::create(outfile));
@@ -359,12 +358,16 @@ pub fn print_sig(args: &ArgMatches, msg: &str, sig: &str) {
 
 pub fn load_public_pem(pem_path: &Path) -> JwtResult<RSA> {
     let mut buffer = try!(File::open(pem_path));
-    RSA::public_key_from_pem(&mut buffer).map_err(From::from)
+    let mut bytes = vec![];
+    try!(buffer.read_to_end(&mut bytes));
+    RSA::public_key_from_pem(&bytes[..]).map_err(From::from)
 }
 
 pub fn load_private_pem(pem_path: &Path) -> JwtResult<RSA> {
     let mut buffer = try!(File::open(pem_path));
-    RSA::private_key_from_pem(&mut buffer).map_err(From::from)
+    let mut bytes = vec![];
+    try!(buffer.read_to_end(&mut bytes));
+    RSA::private_key_from_pem(&bytes[..]).map_err(From::from)
 }
 
 pub fn load_jwk(jwk_path: &Path) -> JwtResult<Jwk> {

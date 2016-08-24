@@ -51,65 +51,69 @@ impl Serialize for Header {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer,
     {
-        serializer.serialize_map(HeaderSerVisitor(&self))
-    }
-}
+        let mut state = try!(serializer.serialize_map(None));
 
-struct HeaderSerVisitor<'a>(&'a Header);
-
-impl<'a> serde::ser::MapVisitor for HeaderSerVisitor<'a> {
-    fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
-        where S: serde::Serializer
-    {
-        if self.0.typ.is_some() {
-            try!(serializer.serialize_struct_elt("typ", &self.0.typ));
+        if self.typ.is_some() {
+            try!(serializer.serialize_map_key(&mut state, "typ"));
+            try!(serializer.serialize_map_value(&mut state, &self.typ));
         }
         
-        try!(serializer.serialize_struct_elt("alg", &self.0.alg));
+        try!(serializer.serialize_map_key(&mut state, "alg"));
+        try!(serializer.serialize_map_value(&mut state, &self.alg));
         
-        if self.0.jku.is_some() {
-            try!(serializer.serialize_struct_elt("jku", &self.0.jku));
+        if self.jku.is_some() {
+            try!(serializer.serialize_map_key(&mut state, "jku"));
+            try!(serializer.serialize_map_value(&mut state, &self.jku));
         }
         
-        if self.0.jwk.is_some() {
-            try!(serializer.serialize_struct_elt("jwk", &self.0.jwk));
+        if self.jwk.is_some() {
+            try!(serializer.serialize_map_key(&mut state, "jwk"));
+            try!(serializer.serialize_map_value(&mut state, &self.jwk));
         }
         
-        if self.0.kid.is_some() {
-            try!(serializer.serialize_struct_elt("kid", &self.0.kid));
+        if self.kid.is_some() {
+            try!(serializer.serialize_map_key(&mut state, "kid"));
+            try!(serializer.serialize_map_value(&mut state, &self.kid));
         }
         
-        if self.0.x5u.is_some() {
-            try!(serializer.serialize_struct_elt("x5u", &self.0.x5u));
+        if self.x5u.is_some() {
+            try!(serializer.serialize_map_key(&mut state, "x5u"));
+            try!(serializer.serialize_map_value(&mut state, &self.x5u));
         }
         
-        if self.0.x5c.is_some() {
-            try!(serializer.serialize_struct_elt("x5c", &self.0.x5c));
+        if self.x5c.is_some() {
+            try!(serializer.serialize_map_key(&mut state, "x5c"));
+            try!(serializer.serialize_map_value(&mut state, &self.x5c));
         }
         
-        if self.0.x5t.is_some() {
-            try!(serializer.serialize_struct_elt("x5t", &self.0.x5t));
+        if self.x5t.is_some() {
+            try!(serializer.serialize_map_key(&mut state, "x5t"));
+            try!(serializer.serialize_map_value(&mut state, &self.x5t));
         }
         
-        if self.0.x5t_s256.is_some() {
-            try!(serializer.serialize_struct_elt("x5t#s256", &self.0.x5t_s256));
+        if self.x5t_s256.is_some() {
+            try!(serializer.serialize_map_key(&mut state, "x5t#s256"));
+            try!(serializer.serialize_map_value(&mut state, &self.x5t_s256));
         }
         
-        if self.0.cty.is_some() {
-            try!(serializer.serialize_struct_elt("cty", &self.0.cty));
+        if self.cty.is_some() {
+            try!(serializer.serialize_map_key(&mut state, "cty"));
+            try!(serializer.serialize_map_value(&mut state, &self.cty));
         }
         
-        if let Some(crit) = self.0.crit.as_ref() {
+        if let Some(crit) = self.crit.as_ref() {
             if crit.len() != 0 {
-                try!(serializer.serialize_struct_elt("crit", &self.0.crit));
+                try!(serializer.serialize_map_key(&mut state, "crit"));
+                try!(serializer.serialize_map_value(&mut state, &self.crit));
             }
         }
         
-        for (k,v) in &self.0.custom_params {
-            try!(serializer.serialize_map_elt(k, v));
+        for (k,v) in &self.custom_params {
+            try!(serializer.serialize_map_key(&mut state, k));
+            try!(serializer.serialize_map_value(&mut state, v));
         }
         
-        Ok(None)
+        serializer.serialize_map_end(state)
     }
 }
 

@@ -88,10 +88,17 @@ quick_error! {
             display("invalid key param: {}", s)
         }
         
-        SslError(e: openssl::ssl::error::SslError) {
+        SslError(e: openssl::error::Error) {
             from()
             description("ssl error")
             display("ssl error: {}", e)
+            cause(e)
+        }
+
+        SslAggregateError(e: openssl::error::ErrorStack) {
+            from()
+            description("ssl aggregate error")
+            display("ssl aggregate error: {}", e)
             cause(e)
         }
         

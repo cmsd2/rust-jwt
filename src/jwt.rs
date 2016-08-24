@@ -111,21 +111,14 @@ impl Serialize for JwtClaims {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer,
     {
-        serializer.serialize_map(JwtClaimsSerVisitor(&self))
-    }
-}
+        let mut state = try!(serializer.serialize_map(Some(self.claims.len())));
 
-struct JwtClaimsSerVisitor<'a>(&'a JwtClaims);
-
-impl<'a> serde::ser::MapVisitor for JwtClaimsSerVisitor<'a> {
-    fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
-        where S: serde::Serializer
-    {        
-        for (k,v) in &self.0.claims {
-            try!(serializer.serialize_map_elt(k, v));
+        for (k,v) in &self.claims {
+            try!(serializer.serialize_map_key(&mut state, k));
+            try!(serializer.serialize_map_value(&mut state, v));
         }
         
-        Ok(None)
+        serializer.serialize_map_end(state)
     }
 }
 

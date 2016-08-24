@@ -1,8 +1,8 @@
 use jwk::*;
 use result::*;
+use openssl::crypto::hash;
 use openssl::crypto::rsa::RSA;
-use openssl::nid::Nid;
-use openssl::bn::BigNum;
+use openssl::bn::BigNumRef;
 use rust_crypto::digest::Digest;
 use rust_crypto::sha2::{Sha256, Sha384, Sha512};
 use rustc_serialize::base64::*;
@@ -14,36 +14,51 @@ use json::*;
 use key_type::*;
 use bignum::*;
 
-pub fn bn_to_b64(bn: BigNum) -> JwtResult<String> {
+pub fn bn_to_b64(bn: BigNumRef) -> JwtResult<String> {
     use Part;
 
-    let component = BigNumComponent(bn);
+    let component = BigNumComponent(try!(bn.to_owned()));
     component.to_base64().map_err(From::from)
 }
 
 pub trait RsaParameters {
-    fn dp(&self) -> JwtResult<BigNum>;
-    fn dq(&self) -> JwtResult<BigNum>;
-    fn qi(&self) -> JwtResult<BigNum>;
+    fn dp(&self) -> Option<BigNumRef>;
+    fn dq(&self) -> Option<BigNumRef>;
+    fn qi(&self) -> Option<BigNumRef>;
 }
 
 impl RsaParameters for RSA {
-    fn dp(&self) -> JwtResult<BigNum> {
+    fn dp<'a>(&self) -> Option<BigNumRef<'a>> {
         unsafe {
-            BigNum::new_from_ffi((*self.as_ptr()).dmp1)
-        }.map_err(From::from)
+            let dp = (*self.as_ptr()).dmp1;
+            if dp.is_null() {
+                None
+            } else {
+                Some(BigNumRef::from_ptr(dp))
+            }
+        }
     }
 
-    fn dq(&self) -> JwtResult<BigNum> {
+    fn dq<'a>(&self) -> Option<BigNumRef<'a>> {
         unsafe {
-            BigNum::new_from_ffi((*self.as_ptr()).dmq1)
-        }.map_err(From::from)
+            let dq = (*self.as_ptr()).dmq1;
+            if dq.is_null() {
+                None
+            } else {
+                Some(BigNumRef::from_ptr(dq))
+            }
+        }
     }
 
-    fn qi(&self) -> JwtResult<BigNum> {
+    fn qi<'a>(&self) -> Option<BigNumRef<'a>> {
         unsafe {
-            BigNum::new_from_ffi((*self.as_ptr()).iqmp)
-        }.map_err(From::from)
+            let qi = (*self.as_ptr()).iqmp;
+            if qi.is_null() {
+                None
+            } else {
+                Some(BigNumRef::from_ptr(qi))
+            }
+        }
     }
 }
 
@@ -57,39 +72,63 @@ impl RsaKey for RSA {
     fn convert_private_pem_to_jwk(self) -> JwtResult<Jwk> {
         let mut vs = ValidationState::new();
     
-        if !self.has_n() {
+        if self.n().is_none() {
             vs.reject("n", ValidationError::MissingRequiredValue("n".to_owned()));
         }
     
-        if !self.has_e() {
+        if self.e().is_none() {
             vs.reject("e", ValidationError::MissingRequiredValue("e".to_owned()));
         }
+
+        if self.d().is_none() {
+            vs.reject("d", ValidationError::MissingRequiredValue("d".to_owned()));
+        }
+
+        if self.p().is_none() {
+            vs.reject("p", ValidationError::MissingRequiredValue("p".to_owned()));
+        }
     
+        if self.q().is_none() {
+            vs.reject("q", ValidationError::MissingRequiredValue("q".to_owned()));
+        }
+
+        if self.dp().is_none() {
+            vs.reject("dp", ValidationError::MissingRequiredValue("dp".to_owned()));
+        }
+
+        if self.dq().is_none() {
+            vs.reject("dq", ValidationError::MissingRequiredValue("dq".to_owned()));
+        }
+
+        if self.qi().is_none() {
+            vs.reject("qi", ValidationError::MissingRequiredValue("qi".to_owned()));
+        }
+
         if vs.valid {
             let mut jwk = Jwk::new(KeyType::RSA);
         
-            let n = try!(self.n());
+            let n = self.n().unwrap();
             jwk.set_value("n", &try!(bn_to_b64(n)));
         
-            let e = try!(self.e());
+            let e = self.e().unwrap();
             jwk.set_value("e", &try!(bn_to_b64(e)));
         
-            let d = try!(self.d());
+            let d = self.d().unwrap();
             jwk.set_value("d", &try!(bn_to_b64(d)));
         
-            let p = try!(self.p());
+            let p = self.p().unwrap();
             jwk.set_value("p", &try!(bn_to_b64(p)));
         
-            let q = try!(self.q());
+            let q = self.q().unwrap();
             jwk.set_value("q", &try!(bn_to_b64(q)));
         
-            let dp = try!(self.dp());
+            let dp = self.dp().unwrap();
             jwk.set_value("dp", &try!(bn_to_b64(dp)));
         
-            let dq = try!(self.dq());
+            let dq = self.dq().unwrap();
             jwk.set_value("dq", &try!(bn_to_b64(dq)));
         
-            let qi = try!(self.qi());
+            let qi = self.qi().unwrap();
             jwk.set_value("qi", &try!(bn_to_b64(qi)));
         
             Ok(jwk)
@@ -103,24 +142,24 @@ impl RsaKey for RSA {
 
         let mut vs = ValidationState::new();
 
-        if !self.has_n() {
+        if self.n().is_none() {
             vs.reject("n", ValidationError::MissingRequiredValue("n".to_owned()));
         }
     
-        if !self.has_e() {
+        if self.e().is_none() {
             vs.reject("e", ValidationError::MissingRequiredValue("e".to_owned()));
         }
     
         if vs.valid {
             let mut jwk = Jwk::new(KeyType::RSA);
         
-            let n = try!(self.n());
-            let n_bn = BigNumComponent(n);
+            let n = self.n().unwrap();
+            let n_bn = BigNumComponent(try!(n.to_owned()));
             let n_b64 = try!(n_bn.to_base64());
             jwk.set_value("n", &n_b64);
         
-            let e = try!(self.e());
-            let e_bn = BigNumComponent(e);
+            let e = self.e().unwrap();
+            let e_bn = BigNumComponent(try!(e.to_owned()));
             let e_b64 = try!(e_bn.to_base64());
             jwk.set_value("e", &e_b64);
         
@@ -179,7 +218,7 @@ impl RsaSigner {
         }
     }
     
-    fn sign_with_digest<D: Digest>(mut d: D, nid: Nid, private_key: &Jwk, input: &[u8]) -> JwtResult<Vec<u8>> {
+    fn sign_with_digest<D: Digest>(mut d: D, hash_type: hash::Type, private_key: &Jwk, input: &[u8]) -> JwtResult<Vec<u8>> {
         let mut hash = vec![0;d.output_bytes()];
                 
         d.input(&input);
@@ -187,16 +226,16 @@ impl RsaSigner {
         
         let rsa = try!(private_key.private_key());
         
-        rsa.sign(nid, &hash).map_err(From::from)
+        rsa.sign(hash_type, &hash).map_err(From::from)
     }
 }
 
 impl Signer for RsaSigner {
     fn sign(&self, header: &Header, signing_input: &[u8]) -> JwtResult<String> {
         let result = try!(match header.alg {
-            Algorithm::RS256 => Self::sign_with_digest(Sha256::new(), Nid::SHA256, &self.private_key, signing_input),
-            Algorithm::RS384 => Self::sign_with_digest(Sha384::new(), Nid::SHA256, &self.private_key, signing_input),
-            Algorithm::RS512 => Self::sign_with_digest(Sha512::new(), Nid::SHA256, &self.private_key, signing_input),
+            Algorithm::RS256 => Self::sign_with_digest(Sha256::new(), hash::Type::SHA256, &self.private_key, signing_input),
+            Algorithm::RS384 => Self::sign_with_digest(Sha384::new(), hash::Type::SHA384, &self.private_key, signing_input),
+            Algorithm::RS512 => Self::sign_with_digest(Sha512::new(), hash::Type::SHA512, &self.private_key, signing_input),
             _ => Err(JwtError::InvalidAlgorithm("algorithm is not a supported mac: ".to_owned(), header.alg))
         });
         
@@ -247,13 +286,12 @@ mod test {
         
         println!("digest: {:?}", hash);
         
-        let sig = private_key.sign(openssl::nid::Nid::SHA256, &hash).unwrap();
+        let sig = private_key.sign(openssl::crypto::hash::Type::SHA256, &hash).unwrap();
         
         println!("{:?}", sig);
         
-        let verified = public_key.verify(openssl::nid::Nid::SHA256, &hash, &sig).unwrap();
-        
-        assert!(verified);
+        // should not throw
+        public_key.verify(openssl::crypto::hash::Type::SHA256, &hash, &sig).unwrap();
     }
     
     #[test]
@@ -264,11 +302,13 @@ mod test {
         let private_key = key.private_key().unwrap();
         
         let mut buffer = File::create("key.pem").unwrap();
-        private_key.private_key_to_pem(&mut buffer).unwrap();
+        let bytes = private_key.private_key_to_pem().unwrap();
+        buffer.write_all(&bytes[..]).unwrap();
         buffer.flush().unwrap();
         
         let mut buffer = File::create("pubkey.pem").unwrap();
-        public_key.public_key_to_pem(&mut buffer).unwrap();
+        let bytes = public_key.public_key_to_pem().unwrap();
+        buffer.write_all(&bytes[..]).unwrap();
         buffer.flush().unwrap();
     }
 }

@@ -64,7 +64,13 @@ impl serde::Serialize for Jwk {
     fn serialize<S>(&self, serializer: &mut S) -> std::result::Result<(), S::Error>
         where S: serde::Serializer,
     {
-        serializer.serialize_map(JwkSerVisitor::new(self))
+        let mut state = try!(serializer.serialize_map(Some(self.params.len())));
+        for (k,v) in &self.params {
+            try!(serializer.serialize_map_key(&mut state, k));
+            try!(serializer.serialize_map_value(&mut state, v));
+        }
+
+        serializer.serialize_map_end(state)
     }
 }
 
@@ -77,22 +83,6 @@ impl <'a> JwkSerVisitor<'a> {
         JwkSerVisitor {
             jwk: k
         }
-    }
-}
-
-impl <'a> serde::ser::MapVisitor for JwkSerVisitor<'a> {
-    fn visit<S>(&mut self, serializer: &mut S) -> std::result::Result<Option<()>, S::Error> where S: Serializer {
-        try!(serializer.serialize_struct_elt("kty", self.jwk.kty));
-        
-        for (k,v) in &self.jwk.params {
-            try!(serializer.serialize_map_elt(k, v));
-        }
-        
-        Ok(None)
-    }
-    
-    fn len(&self) -> Option<usize> {
-        None
     }
 }
 
