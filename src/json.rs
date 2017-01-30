@@ -12,7 +12,7 @@ pub trait JsonValueMap {
 pub trait JsonValueMapAccessors {
     fn get_json_value<'a>(&'a self, name: &str) -> Option<&'a serde_json::value::Value>;
     fn set_json_value<T: Into<String>>(&mut self, name: T, value: serde_json::value::Value) -> ();
-    fn set_value<S: Into<String>, V: serde::Serialize>(&mut self, name: S, value: &V);
+    fn set_value<S: Into<String>, V: serde::Serialize>(&mut self, name: S, value: &V) -> JwtResult<()> ;
     fn remove_value(&mut self, name: &str) -> bool;
     fn has_value(&self, name: &str) -> bool;
     fn get_value<C: serde::Deserialize>(&self, name: &str) -> JwtResult<Option<C>>;
@@ -27,8 +27,9 @@ impl <M> JsonValueMapAccessors for M where M: JsonValueMap {
         self.values_mut().insert(name.into(), value);
     }
     
-    fn set_value<S: Into<String>, V: serde::Serialize>(&mut self, name: S, value: &V) {
-        self.values_mut().insert(name.into(), serde_json::value::to_value(value));
+    fn set_value<S: Into<String>, V: serde::Serialize>(&mut self, name: S, value: &V) -> JwtResult<()> {
+        self.values_mut().insert(name.into(), try!(serde_json::value::to_value(value)));
+        Ok(())
     }
     
     fn remove_value(&mut self, name: &str) -> bool {

@@ -1,5 +1,8 @@
+use std::fmt;
 use serde::{Serialize, Deserialize};
 use serde;
+use serde::ser::SerializeMap;
+use serde::de::Error;
 use serde_json;
 use algorithm::*;
 use std::collections::HashMap;
@@ -48,77 +51,77 @@ impl Default for Header {
 }
 
 impl Serialize for Header {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where S: serde::Serializer,
     {
-        let mut state = try!(serializer.serialize_map(None));
+        let mut map = try!(serializer.serialize_map(None));
 
         if self.typ.is_some() {
-            try!(serializer.serialize_map_key(&mut state, "typ"));
-            try!(serializer.serialize_map_value(&mut state, &self.typ));
+            try!(map.serialize_key("typ"));
+            try!(map.serialize_value(&self.typ));
         }
         
-        try!(serializer.serialize_map_key(&mut state, "alg"));
-        try!(serializer.serialize_map_value(&mut state, &self.alg));
+        try!(map.serialize_key("alg"));
+        try!(map.serialize_value(&self.alg));
         
         if self.jku.is_some() {
-            try!(serializer.serialize_map_key(&mut state, "jku"));
-            try!(serializer.serialize_map_value(&mut state, &self.jku));
+            try!(map.serialize_key("jku"));
+            try!(map.serialize_value(&self.jku));
         }
         
         if self.jwk.is_some() {
-            try!(serializer.serialize_map_key(&mut state, "jwk"));
-            try!(serializer.serialize_map_value(&mut state, &self.jwk));
+            try!(map.serialize_key("jwk"));
+            try!(map.serialize_value(&self.jwk));
         }
         
         if self.kid.is_some() {
-            try!(serializer.serialize_map_key(&mut state, "kid"));
-            try!(serializer.serialize_map_value(&mut state, &self.kid));
+            try!(map.serialize_key("kid"));
+            try!(map.serialize_value(&self.kid));
         }
         
         if self.x5u.is_some() {
-            try!(serializer.serialize_map_key(&mut state, "x5u"));
-            try!(serializer.serialize_map_value(&mut state, &self.x5u));
+            try!(map.serialize_key("x5u"));
+            try!(map.serialize_value(&self.x5u));
         }
         
         if self.x5c.is_some() {
-            try!(serializer.serialize_map_key(&mut state, "x5c"));
-            try!(serializer.serialize_map_value(&mut state, &self.x5c));
+            try!(map.serialize_key("x5c"));
+            try!(map.serialize_value(&self.x5c));
         }
         
         if self.x5t.is_some() {
-            try!(serializer.serialize_map_key(&mut state, "x5t"));
-            try!(serializer.serialize_map_value(&mut state, &self.x5t));
+            try!(map.serialize_key("x5t"));
+            try!(map.serialize_value(&self.x5t));
         }
         
         if self.x5t_s256.is_some() {
-            try!(serializer.serialize_map_key(&mut state, "x5t#s256"));
-            try!(serializer.serialize_map_value(&mut state, &self.x5t_s256));
+            try!(map.serialize_key("x5t#s256"));
+            try!(map.serialize_value(&self.x5t_s256));
         }
         
         if self.cty.is_some() {
-            try!(serializer.serialize_map_key(&mut state, "cty"));
-            try!(serializer.serialize_map_value(&mut state, &self.cty));
+            try!(map.serialize_key("cty"));
+            try!(map.serialize_value(&self.cty));
         }
         
         if let Some(crit) = self.crit.as_ref() {
             if crit.len() != 0 {
-                try!(serializer.serialize_map_key(&mut state, "crit"));
-                try!(serializer.serialize_map_value(&mut state, &self.crit));
+                try!(map.serialize_key("crit"));
+                try!(map.serialize_value(&self.crit));
             }
         }
         
         for (k,v) in &self.custom_params {
-            try!(serializer.serialize_map_key(&mut state, k));
-            try!(serializer.serialize_map_value(&mut state, v));
+            try!(map.serialize_key(k));
+            try!(map.serialize_value(v));
         }
         
-        serializer.serialize_map_end(state)
+        map.end()
     }
 }
 
 impl Deserialize for Header {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Header, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Header, D::Error>
         where D: serde::Deserializer,
     {
         deserializer.deserialize(HeaderDeVisitor)
@@ -130,7 +133,11 @@ struct HeaderDeVisitor;
 impl serde::de::Visitor for HeaderDeVisitor {
     type Value = Header;
 
-    fn visit_map<V>(&mut self, mut visitor: V) -> Result<Header, V::Error>
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("jwt header as a map from string to string")
+    }
+
+    fn visit_map<V>(self, mut visitor: V) -> Result<Header, V::Error>
         where V: serde::de::MapVisitor,
     {
         let mut alg = None;
@@ -174,10 +181,8 @@ impl serde::de::Visitor for HeaderDeVisitor {
 
         let alg = match alg {
             Some(alg) => alg,
-            None => try!(visitor.missing_field("alg")),
+            None => try!(Err(Error::missing_field("alg"))),
         };
-
-        try!(visitor.end());
 
         Ok(Header{ 
             alg: alg,
@@ -213,7 +218,7 @@ mod test {
         h.x5t_s256 = Some("blah256".to_owned());
         h.cty = Some("example".to_owned());
         h.crit = Some(vec!["exp".to_owned()]);
-        h.custom_params.insert("exp".to_owned(), serde_json::to_value("soon"));
+        h.custom_params.insert("exp".to_owned(), serde_json::to_value("soon").expect("serde_json::to_value"));
         
         let h_js = serde_json::to_string(&h).unwrap();
         

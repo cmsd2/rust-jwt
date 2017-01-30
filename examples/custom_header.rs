@@ -1,9 +1,9 @@
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
 
 extern crate jsonwebtoken as jwt;
 extern crate rustc_serialize;
 extern crate serde;
+#[macro_use] extern crate serde_derive;
+extern crate serde_json;
 
 use jwt::{encode, decode};
 use jwt::header::*;

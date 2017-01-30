@@ -1,7 +1,4 @@
 //! Create and parses JWT (JSON Web Tokens)
-//!
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
 
 #![recursion_limit="100"] // for quick-error
 #![cfg_attr(feature = "dev", allow(unstable_features))]
@@ -12,6 +9,7 @@ extern crate rustc_serialize;
 extern crate crypto as rust_crypto;
 #[macro_use] extern crate quick_error;
 extern crate serde;
+#[macro_use] extern crate serde_derive;
 extern crate serde_json;
 extern crate openssl;
 #[macro_use] extern crate log;

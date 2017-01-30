@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::result::Result;
+use std::fmt;
 use super::*;
 use header::Header;
 use claims::expiry::*;
@@ -8,6 +9,7 @@ use result::{JwtError, JwtResult};
 use chrono::*;
 use serde;
 use serde::{Serialize, Deserialize};
+use serde::ser::SerializeMap;
 use serde_json;
 use cast;
 use signer::Signer;
@@ -108,22 +110,22 @@ impl NotBeforeClaim for JwtClaims {
 }
 
 impl Serialize for JwtClaims {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where S: serde::Serializer,
-    {
-        let mut state = try!(serializer.serialize_map(Some(self.claims.len())));
+    {        
+        let mut map = try!(serializer.serialize_map(Some(self.claims.len())));
 
         for (k,v) in &self.claims {
-            try!(serializer.serialize_map_key(&mut state, k));
-            try!(serializer.serialize_map_value(&mut state, v));
+            try!(map.serialize_key(k));
+            try!(map.serialize_value(v));
         }
         
-        serializer.serialize_map_end(state)
+        map.end()
     }
 }
 
 impl Deserialize for JwtClaims {
-    fn deserialize<D>(deserializer: &mut D) -> Result<JwtClaims, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<JwtClaims, D::Error>
         where D: serde::Deserializer,
     {
         deserializer.deserialize(JwtClaimsDeVisitor)
@@ -135,7 +137,11 @@ struct JwtClaimsDeVisitor;
 impl serde::de::Visitor for JwtClaimsDeVisitor {
     type Value = JwtClaims;
 
-    fn visit_map<V>(&mut self, mut visitor: V) -> Result<JwtClaims, V::Error>
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a map from string to string")
+    }
+
+    fn visit_map<V>(self, mut visitor: V) -> Result<JwtClaims, V::Error>
         where V: serde::de::MapVisitor,
     {
         let mut claims = BTreeMap::<String, serde_json::value::Value>::new();
@@ -153,8 +159,6 @@ impl serde::de::Visitor for JwtClaimsDeVisitor {
                 break;
             }
         }
-
-        try!(visitor.end());
 
         Ok(JwtClaims{ 
             claims: claims,

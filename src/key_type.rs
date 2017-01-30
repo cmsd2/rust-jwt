@@ -17,7 +17,7 @@ impl fmt::Display for KeyType {
 }
 
 impl serde::Serialize for KeyType {
-    fn serialize<S>(&self, serializer: &mut S) -> result::Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> result::Result<S::Ok, S::Error>
         where S: serde::Serializer,
     {
         serializer.serialize_str(&format!("{}", self))
@@ -25,7 +25,7 @@ impl serde::Serialize for KeyType {
 }
 
 impl serde::de::Deserialize for KeyType {
-    fn deserialize<D>(deserializer: &mut D) -> result::Result<KeyType, D::Error>
+    fn deserialize<D>(deserializer: D) -> result::Result<KeyType, D::Error>
         where D: serde::de::Deserializer
     {
         deserializer.deserialize(KeyTypeVisitor)
@@ -36,8 +36,12 @@ pub struct KeyTypeVisitor;
 
 impl serde::de::Visitor for KeyTypeVisitor {
     type Value = KeyType;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a jwk key type as a string")
+    }
     
-    fn visit_str<E>(&mut self, s: &str) -> Result<KeyType, E> where E: serde::Error
+    fn visit_str<E>(self, s: &str) -> Result<KeyType, E> where E: serde::de::Error
     {
         match s {
             "RSA" => Ok(KeyType::RSA),

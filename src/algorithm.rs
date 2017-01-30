@@ -1,4 +1,4 @@
-use std::result::Result as CoreResult;
+use std::result::Result;
 use std::fmt;
 use serde;
 use result::{JwtResult, JwtError};
@@ -82,7 +82,7 @@ impl Algorithm {
 }
 
 impl serde::Serialize for Algorithm {
-    fn serialize<S>(&self, serializer: &mut S) -> CoreResult<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where S: serde::Serializer,
     {
         serializer.serialize_str(&format!("{}", self))
@@ -90,7 +90,7 @@ impl serde::Serialize for Algorithm {
 }
 
 impl serde::de::Deserialize for Algorithm {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Algorithm, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Algorithm, D::Error>
         where D: serde::de::Deserializer
     {
         deserializer.deserialize(AlgorithmVisitor)
@@ -101,8 +101,12 @@ pub struct AlgorithmVisitor;
 
 impl serde::de::Visitor for AlgorithmVisitor {
     type Value = Algorithm;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a signing algorithm as a string")
+    }
     
-    fn visit_str<E>(&mut self, s: &str) -> Result<Algorithm, E> where E: serde::Error
+    fn visit_str<E>(self, s: &str) -> Result<Algorithm, E> where E: serde::de::Error
     {
         match s {
             "none" => Ok(Algorithm::None),

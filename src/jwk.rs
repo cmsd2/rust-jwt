@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 use std;
-
+use std::fmt;
 use rustc_serialize::base64::FromBase64;
 use serde;
 use serde::{Deserialize, Serializer, Deserializer};
+use serde::ser::SerializeMap;
+use serde::de::Error;
 use serde_json;
 use openssl::bn::BigNum;
 use bignum::*;
@@ -61,16 +63,16 @@ impl JsonValueMap for Jwk {
 }
 
 impl serde::Serialize for Jwk {
-    fn serialize<S>(&self, serializer: &mut S) -> std::result::Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
         where S: serde::Serializer,
     {
-        let mut state = try!(serializer.serialize_map(Some(self.params.len())));
+        let mut map = try!(serializer.serialize_map(Some(self.params.len())));
         for (k,v) in &self.params {
-            try!(serializer.serialize_map_key(&mut state, k));
-            try!(serializer.serialize_map_value(&mut state, v));
+            try!(map.serialize_key(k));
+            try!(map.serialize_value(v));
         }
 
-        serializer.serialize_map_end(state)
+        map.end()
     }
 }
 
@@ -87,7 +89,7 @@ impl <'a> JwkSerVisitor<'a> {
 }
 
 impl serde::de::Deserialize for Jwk {
-    fn deserialize<D>(deserializer: &mut D) -> std::result::Result<Jwk, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Jwk, D::Error>
         where D: serde::de::Deserializer
     {
         deserializer.deserialize(JwkVisitor)
@@ -98,8 +100,12 @@ pub struct JwkVisitor;
 
 impl serde::de::Visitor for JwkVisitor {
     type Value = Jwk;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a jwk as a map from string to string")
+    }
     
-    fn visit_map<V>(&mut self, mut visitor: V) -> std::result::Result<Jwk, V::Error>
+    fn visit_map<V>(self, mut visitor: V) -> std::result::Result<Jwk, V::Error>
         where V: serde::de::MapVisitor
     {
         let mut kty = None;
@@ -122,10 +128,8 @@ impl serde::de::Visitor for JwkVisitor {
 
         let kty = match kty {
             Some(kty) => kty,
-            None => try!(visitor.missing_field("kty")),
+            None => try!(Err(Error::missing_field("kty"))),
         };
-
-        try!(visitor.end());
 
         Ok(Jwk{ 
             kty: kty,
