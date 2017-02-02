@@ -6,6 +6,7 @@
 #![cfg_attr(feature = "dev", plugin(clippy))]
 
 extern crate rustc_serialize;
+extern crate ring;
 extern crate crypto as rust_crypto;
 #[macro_use] extern crate quick_error;
 extern crate serde;

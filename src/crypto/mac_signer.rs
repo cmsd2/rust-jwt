@@ -2,10 +2,7 @@ use algorithm::Algorithm;
 use result::{JwtError, JwtResult};
 use header::Header;
 use signer::Signer;
-use rust_crypto::mac::{Mac, MacResult};
-use rust_crypto::hmac::Hmac;
-use rust_crypto::sha2::{Sha256, Sha384, Sha512};
-use rust_crypto::digest::Digest;
+use ring::{hmac, digest};
 use rustc_serialize::base64::*;
 
 #[derive(Clone, Debug)]
@@ -23,25 +20,23 @@ impl MacSigner {
         })
     }
     
-    fn sign_with_digest<D: Digest>(d: D, secret: &[u8], input: &[u8]) -> MacResult {
-        let mut hmac = Hmac::new(d, secret);
+    fn sign_with_digest(d: &'static digest::Algorithm, secret: &[u8], input: &[u8]) -> digest::Digest {
+        let key = hmac::SigningKey::new(d, secret);
         
-        hmac.input(input);
-        
-        hmac.result()
+        hmac::sign(&key, input)
     }
 }
 
 impl Signer for MacSigner {
     fn sign(&self, header: &Header, signing_input: &[u8]) -> JwtResult<String> {   
         let result = try!(match header.alg {
-            Algorithm::HS256 => Ok(Self::sign_with_digest(Sha256::new(), &self.secret, signing_input)),
-            Algorithm::HS384 => Ok(Self::sign_with_digest(Sha384::new(), &self.secret, signing_input)),
-            Algorithm::HS512 => Ok(Self::sign_with_digest(Sha512::new(), &self.secret, signing_input)),
+            Algorithm::HS256 => Ok(Self::sign_with_digest(&digest::SHA256, &self.secret, signing_input)),
+            Algorithm::HS384 => Ok(Self::sign_with_digest(&digest::SHA384, &self.secret, signing_input)),
+            Algorithm::HS512 => Ok(Self::sign_with_digest(&digest::SHA512, &self.secret, signing_input)),
             _ => Err(JwtError::InvalidAlgorithm("algorithm is not a supported mac: ".to_owned(), header.alg))
         });
             
-        Ok(result.code().to_base64(URL_SAFE))
+        Ok(result.as_ref().to_base64(URL_SAFE))
     }
     
     fn has_algorithm(&self, a: Algorithm) -> bool {

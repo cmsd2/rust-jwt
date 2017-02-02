@@ -17,6 +17,7 @@ rustc-serialize = "0.3"
 clippy = {version = "~0.0.44", optional = true}
 rust-crypto = "0.2.35"
 openssl = "0.8.2"
+ring = "0.6"
 quick-error = "1.0"
 serde = "0.9"
 serde_derive = "0.9"

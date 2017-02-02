@@ -6,6 +6,7 @@ use std::fmt;
 use serde_json;
 use rustc_serialize;
 use openssl;
+use ring;
 use chrono;
 use cast;
 use validation::*;
@@ -86,6 +87,13 @@ quick_error! {
         InvalidKeyParam(s: String) {
             description("invalid key param")
             display("invalid key param: {}", s)
+        }
+
+        RingUnknownError(e: ring::error::Unspecified) {
+            from()
+            description("ring unknown error")
+            display("ring unknown error: {}", e)
+            cause(e)
         }
         
         SslError(e: openssl::error::Error) {

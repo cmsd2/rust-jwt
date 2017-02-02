@@ -1,5 +1,6 @@
 use jwk::*;
 use result::*;
+use ring::signature;
 use openssl::crypto::hash;
 use openssl::crypto::rsa::RSA;
 use openssl::bn::BigNumRef;
