@@ -11,13 +11,15 @@ pub trait NotBeforeClaim {
 
 pub struct NotBeforeVerifier<C: NotBeforeClaim, T: SkewedTimeProvider> {
     time_provider: T,
+    grace_period: Duration,
     phantom: PhantomData<C>,
 }
 
 impl<C: NotBeforeClaim, T: SkewedTimeProvider> NotBeforeVerifier<C, T> {
-    pub fn new(time_provider: T) -> NotBeforeVerifier<C, T> {
+    pub fn new(time_provider: T, grace_period: Duration) -> NotBeforeVerifier<C, T> {
         NotBeforeVerifier {
             time_provider: time_provider,
+            grace_period: grace_period,
             phantom: PhantomData,
         }
     }
@@ -25,7 +27,7 @@ impl<C: NotBeforeClaim, T: SkewedTimeProvider> NotBeforeVerifier<C, T> {
 
 impl<C: NotBeforeClaim, T: SkewedTimeProvider> Rule<C, ValidationState> for NotBeforeVerifier<C, T> {
     fn validate(&self, c: &C, state: &mut ValidationState) -> ValidationResult<()> {
-        let now_plus_a_bit = try!(self.time_provider.now_utc_plus_a_bit().map_err(|e| ValidationError::Error(Arc::new(Box::new(e)))));
+        let now_plus_a_bit = try!(self.time_provider.now_utc_plus_duration(self.grace_period).map_err(|e| ValidationError::Error(Arc::new(Box::new(e)))));
     
         if let Some(not_before_time) = try!(c.get_not_before_time().map_err(|e| ValidationError::Error(Arc::new(Box::new(e))))) {
             if now_plus_a_bit.lt(&not_before_time) {
@@ -57,9 +59,10 @@ mod test {
         let now = UTC::now();
         let tp = FixedTimeProvider(now);
         let c = TestClaim(now.checked_sub(Duration::seconds(10)));
+        let grace = Duration::minutes(1);
         
         let mut vs = ValidationSchema::new();
-        vs.rule(Box::new(NotBeforeVerifier::new(tp)));
+        vs.rule(Box::new(NotBeforeVerifier::new(tp, grace)));
         
         assert!(vs.validate(&c).unwrap());
     }
@@ -69,9 +72,10 @@ mod test {
         let now = UTC::now();
         let tp = FixedTimeProvider(now);
         let c = TestClaim(now.checked_sub(Duration::minutes(10)));
+        let grace = Duration::minutes(1);
         
         let mut vs = ValidationSchema::new();
-        vs.rule(Box::new(NotBeforeVerifier::new(tp)));
+        vs.rule(Box::new(NotBeforeVerifier::new(tp, grace)));
         
         assert!(vs.validate(&c).unwrap());
     }
@@ -81,9 +85,10 @@ mod test {
         let now = UTC::now();
         let tp = FixedTimeProvider(now);
         let c = TestClaim(now.checked_add(Duration::seconds(10)));
+        let grace = Duration::minutes(1);
         
         let mut vs = ValidationSchema::new();
-        vs.rule(Box::new(NotBeforeVerifier::new(tp)));
+        vs.rule(Box::new(NotBeforeVerifier::new(tp, grace)));
         
         assert!(vs.validate(&c).unwrap());
     }
@@ -93,9 +98,10 @@ mod test {
         let now = UTC::now();
         let tp = FixedTimeProvider(now);
         let c = TestClaim(now.checked_add(Duration::seconds(60)));
+        let grace = Duration::minutes(1);
         
         let mut vs = ValidationSchema::new();
-        vs.rule(Box::new(NotBeforeVerifier::new(tp)));
+        vs.rule(Box::new(NotBeforeVerifier::new(tp, grace)));
         
         assert!(vs.validate(&c).unwrap());
     }
@@ -105,9 +111,10 @@ mod test {
         let now = UTC::now();
         let tp = FixedTimeProvider(now);
         let c = TestClaim(now.checked_add(Duration::minutes(10)));
+        let grace = Duration::minutes(1);
         
         let mut vs = ValidationSchema::new();
-        vs.rule(Box::new(NotBeforeVerifier::new(tp)));
+        vs.rule(Box::new(NotBeforeVerifier::new(tp, grace)));
         
         assert!(false == vs.validate(&c).unwrap());
     }

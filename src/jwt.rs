@@ -193,14 +193,16 @@ mod test {
     #[test]
     fn test_claims_valid_in_server() {
         let now = UTC::now();
+        let tp = FixedTimeProvider(now);
+        let grace = Duration::minutes(1);
         
         let mut h = JwtClaims::new();
         h.set_value("exp", &now.timestamp());
         h.set_value("nbf", &now.timestamp());
         
         let mut vs = ValidationSchema::new();
-        vs.rule(Box::new(ExpiryVerifier::new(SlowTimeProvider::new(FixedTimeProvider(now)))));
-        vs.rule(Box::new(NotBeforeVerifier::new(SlowTimeProvider::new(FixedTimeProvider(now)))));
+        vs.rule(Box::new(ExpiryVerifier::new(tp, grace)));
+        vs.rule(Box::new(NotBeforeVerifier::new(tp, grace)));
         
         assert!(vs.validate(&h).unwrap());
     }
@@ -208,14 +210,16 @@ mod test {
     #[test]
     fn test_claims_invalid_in_server() {
         let now = UTC::now();
+        let tp = FixedTimeProvider(now);
+        let grace = Duration::minutes(1);
         
         let mut h = JwtClaims::new();
         h.set_value("exp", &now.checked_sub(Duration::minutes(10)).unwrap().timestamp());
         h.set_value("nbf", &now.checked_sub(Duration::minutes(10)).unwrap().timestamp());
         
         let mut vs = ValidationSchema::new();
-        vs.rule(Box::new(ExpiryVerifier::new(SlowTimeProvider::new(FixedTimeProvider(now)))));
-        vs.rule(Box::new(NotBeforeVerifier::new(SlowTimeProvider::new(FixedTimeProvider(now)))));
+        vs.rule(Box::new(ExpiryVerifier::new(tp, grace)));
+        vs.rule(Box::new(NotBeforeVerifier::new(tp, grace)));
         
         assert!(false == vs.validate(&h).unwrap());
     }
