@@ -25,7 +25,7 @@ impl<C: ExpiryClaim, T: SkewedTimeProvider> ExpiryVerifier<C, T> {
 
 impl<C: ExpiryClaim, T: SkewedTimeProvider> Rule<C, ValidationState> for ExpiryVerifier<C, T> {
     fn validate(&self, c: &C, state: &mut ValidationState) -> ValidationResult<()> {
-        let now_plus_a_bit = try!(self.time_provider.now_utc_minus_a_bit().map_err(|e| ValidationError::Error(Arc::new(Box::new(e)))));
+        let now_plus_a_bit = try!(self.time_provider.now_utc().map_err(|e| ValidationError::Error(Arc::new(Box::new(e)))));
     
         if let Some(expiry) = try!(c.get_expiry_time().map_err(|e| ValidationError::Error(Arc::new(Box::new(e))))) {
             if now_plus_a_bit.ge(&expiry) {
@@ -55,7 +55,7 @@ mod test {
     #[test]
     fn test_almost_expired() {
         let now = UTC::now();
-        let tp = FixedTimeProvider(now);
+        let tp = SlowTimeProvider::new(FixedTimeProvider(now));
         let c = TestClaim(now.checked_add(Duration::seconds(10)));
         
         let mut vs = ValidationSchema::new();
@@ -67,7 +67,7 @@ mod test {
     #[test]
     fn test_not_expired() {
         let now = UTC::now();
-        let tp = FixedTimeProvider(now);
+        let tp = SlowTimeProvider::new(FixedTimeProvider(now));
         let c = TestClaim(now.checked_add(Duration::minutes(10)));
         
         let mut vs = ValidationSchema::new();
@@ -79,7 +79,7 @@ mod test {
     #[test]
     fn test_would_have_just_expired() {
         let now = UTC::now();
-        let tp = FixedTimeProvider(now);
+        let tp = SlowTimeProvider::new(FixedTimeProvider(now));
         let c = TestClaim(now.checked_sub(Duration::seconds(10)));
         
         let mut vs = ValidationSchema::new();
@@ -91,7 +91,7 @@ mod test {
     #[test]
     fn test_just_expired() {
         let now = UTC::now();
-        let tp = FixedTimeProvider(now);
+        let tp = SlowTimeProvider::new(FixedTimeProvider(now));
         let c = TestClaim(now.checked_sub(Duration::minutes(1)));
         
         let mut vs = ValidationSchema::new();
@@ -103,7 +103,7 @@ mod test {
     #[test]
     fn test_definitely_expired() {
         let now = UTC::now();
-        let tp = FixedTimeProvider(now);
+        let tp = SlowTimeProvider::new(FixedTimeProvider(now));
         let c = TestClaim(now.checked_sub(Duration::minutes(10)));
         
         let mut vs = ValidationSchema::new();

@@ -191,7 +191,7 @@ mod test {
     }
     
     #[test]
-    fn test_claims_valid() {
+    fn test_claims_valid_in_server() {
         let now = UTC::now();
         
         let mut h = JwtClaims::new();
@@ -199,10 +199,25 @@ mod test {
         h.set_value("nbf", &now.timestamp());
         
         let mut vs = ValidationSchema::new();
-        vs.rule(Box::new(ExpiryVerifier::new(FixedTimeProvider(now))));
-        vs.rule(Box::new(NotBeforeVerifier::new(FixedTimeProvider(now))));
+        vs.rule(Box::new(ExpiryVerifier::new(SlowTimeProvider::new(FixedTimeProvider(now)))));
+        vs.rule(Box::new(NotBeforeVerifier::new(SlowTimeProvider::new(FixedTimeProvider(now)))));
         
         assert!(vs.validate(&h).unwrap());
+    }
+
+    #[test]
+    fn test_claims_invalid_in_server() {
+        let now = UTC::now();
+        
+        let mut h = JwtClaims::new();
+        h.set_value("exp", &now.checked_sub(Duration::minutes(10)).unwrap().timestamp());
+        h.set_value("nbf", &now.checked_sub(Duration::minutes(10)).unwrap().timestamp());
+        
+        let mut vs = ValidationSchema::new();
+        vs.rule(Box::new(ExpiryVerifier::new(SlowTimeProvider::new(FixedTimeProvider(now)))));
+        vs.rule(Box::new(NotBeforeVerifier::new(SlowTimeProvider::new(FixedTimeProvider(now)))));
+        
+        assert!(false == vs.validate(&h).unwrap());
     }
     
     #[test]
