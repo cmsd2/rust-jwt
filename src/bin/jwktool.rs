@@ -4,7 +4,7 @@ extern crate serde_json;
 extern crate clap;
 extern crate rustc_serialize;
 
-use openssl::crypto::rsa::RSA;
+use openssl::rsa::Rsa;
 use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -199,7 +199,7 @@ pub fn convert(args: &ArgMatches) -> JwtResult<()> {
     let format = args.value_of("format").unwrap_or("jwk");
     
     if let Some(pem) = args.value_of("pem") {
-        let rsa: RSA = if args.is_present("pubin") {
+        let rsa: Rsa = if args.is_present("pubin") {
             load_public_pem(&PathBuf::from(pem)).unwrap()
         } else {
             load_private_pem(&PathBuf::from(pem)).unwrap()
@@ -356,18 +356,18 @@ pub fn print_sig(args: &ArgMatches, msg: &str, sig: &str) {
     }
 }
 
-pub fn load_public_pem(pem_path: &Path) -> JwtResult<RSA> {
+pub fn load_public_pem(pem_path: &Path) -> JwtResult<Rsa> {
     let mut buffer = try!(File::open(pem_path));
     let mut bytes = vec![];
     try!(buffer.read_to_end(&mut bytes));
-    RSA::public_key_from_pem(&bytes[..]).map_err(From::from)
+    Rsa::public_key_from_pem(&bytes[..]).map_err(From::from)
 }
 
-pub fn load_private_pem(pem_path: &Path) -> JwtResult<RSA> {
+pub fn load_private_pem(pem_path: &Path) -> JwtResult<Rsa> {
     let mut buffer = try!(File::open(pem_path));
     let mut bytes = vec![];
     try!(buffer.read_to_end(&mut bytes));
-    RSA::private_key_from_pem(&bytes[..]).map_err(From::from)
+    Rsa::private_key_from_pem(&bytes[..]).map_err(From::from)
 }
 
 pub fn load_jwk(jwk_path: &Path) -> JwtResult<Jwk> {

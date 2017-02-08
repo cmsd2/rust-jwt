@@ -1,9 +1,13 @@
 use jwk::*;
 use result::*;
 use ring::{digest, signature};
-use openssl::crypto::hash;
-use openssl::crypto::rsa::RSA;
+use openssl::hash;
 use openssl::bn::BigNumRef;
+use openssl;
+use openssl::types::OpenSslTypeRef;
+use openssl::rsa::Rsa;
+use openssl::pkey::PKey;
+use openssl_sys::{BIGNUM};
 use rust_crypto::digest::Digest;
 use rust_crypto::sha2::{Sha256, Sha384, Sha512};
 use rustc_serialize::base64::*;
@@ -15,7 +19,7 @@ use json::*;
 use key_type::*;
 use bignum::*;
 
-pub fn bn_to_b64(bn: BigNumRef) -> JwtResult<String> {
+pub fn bn_to_b64(bn: &BigNumRef) -> JwtResult<String> {
     use Part;
 
     let component = BigNumComponent(try!(bn.to_owned()));
@@ -23,41 +27,41 @@ pub fn bn_to_b64(bn: BigNumRef) -> JwtResult<String> {
 }
 
 pub trait RsaParameters {
-    fn dp(&self) -> Option<BigNumRef>;
-    fn dq(&self) -> Option<BigNumRef>;
-    fn qi(&self) -> Option<BigNumRef>;
+    fn dp(&self) -> Option<&BigNumRef>;
+    fn dq(&self) -> Option<&BigNumRef>;
+    fn qi(&self) -> Option<&BigNumRef>;
 }
 
-impl RsaParameters for RSA {
-    fn dp<'a>(&self) -> Option<BigNumRef<'a>> {
+impl RsaParameters for Rsa {
+    fn dp(&self) -> Option<&BigNumRef> {
         unsafe {
-            let dp = (*self.as_ptr()).dmp1;
+            let dp: *mut BIGNUM = (*self.as_ptr()).dmp1;
             if dp.is_null() {
                 None
             } else {
-                Some(BigNumRef::from_ptr(dp))
+                Some(BigNumRef::from_ptr(dp as *mut _))
             }
         }
     }
 
-    fn dq<'a>(&self) -> Option<BigNumRef<'a>> {
+    fn dq(&self) -> Option<&BigNumRef> {
         unsafe {
-            let dq = (*self.as_ptr()).dmq1;
+            let dq: *mut BIGNUM = (*self.as_ptr()).dmq1;
             if dq.is_null() {
                 None
             } else {
-                Some(BigNumRef::from_ptr(dq))
+                Some(BigNumRef::from_ptr(dq as *mut _))
             }
         }
     }
 
-    fn qi<'a>(&self) -> Option<BigNumRef<'a>> {
+    fn qi(&self) -> Option<&BigNumRef> {
         unsafe {
-            let qi = (*self.as_ptr()).iqmp;
+            let qi: *mut BIGNUM = (*self.as_ptr()).iqmp;
             if qi.is_null() {
                 None
             } else {
-                Some(BigNumRef::from_ptr(qi))
+                Some(BigNumRef::from_ptr(qi as *mut _))
             }
         }
     }
@@ -69,7 +73,7 @@ pub trait RsaKey {
     fn convert_public_pem_to_jwk(self) -> JwtResult<Jwk>;
 }
 
-impl RsaKey for RSA {
+impl RsaKey for Rsa {
     fn convert_private_pem_to_jwk(self) -> JwtResult<Jwk> {
         let mut vs = ValidationState::new();
     
@@ -172,22 +176,22 @@ impl RsaKey for RSA {
 }
 
 pub trait RsaJwk {
-    fn public_key(&self) -> JwtResult<RSA>;
+    fn public_key(&self) -> JwtResult<Rsa>;
     
-    fn private_key(&self) -> JwtResult<RSA>;
+    fn private_key(&self) -> JwtResult<Rsa>;
     
     fn is_private_key(&self) -> bool;
 }
 
 impl RsaJwk for Jwk {
-    fn public_key(&self) -> JwtResult<RSA> {
+    fn public_key(&self) -> JwtResult<Rsa> {
         let n = try!(self.get_bignum_param("n"));
         let e = try!(self.get_bignum_param("e"));        
         
-        RSA::from_public_components(n, e).map_err(JwtError::from)
+        Rsa::from_public_components(n, e).map_err(JwtError::from)
     }
     
-    fn private_key(&self) -> JwtResult<RSA> {
+    fn private_key(&self) -> JwtResult<Rsa> {
         let n = try!(self.get_bignum_param("n"));
         let e = try!(self.get_bignum_param("e"));       
         let d = try!(self.get_bignum_param("d"));
@@ -197,7 +201,7 @@ impl RsaJwk for Jwk {
         let dq = try!(self.get_bignum_param("dq"));
         let qi = try!(self.get_bignum_param("qi"));
         
-        RSA::from_private_components(n, e, d, p, q, dp, dq, qi).map_err(JwtError::from)
+        Rsa::from_private_components(n, e, d, p, q, dp, dq, qi).map_err(JwtError::from)
     }
     
     fn is_private_key(&self) -> bool {
@@ -219,24 +223,27 @@ impl RsaSigner {
         }
     }
     
-    fn sign_with_digest<D: Digest>(mut d: D, hash_type: hash::Type, private_key: &Jwk, input: &[u8]) -> JwtResult<Vec<u8>> {
-        let mut hash = vec![0;d.output_bytes()];
-                
-        d.input(&input);
-        d.result(&mut hash);
-        
+    fn sign_with_digest(d: hash::MessageDigest, private_key: &Jwk, input: &[u8]) -> JwtResult<Vec<u8>> {
         let rsa = try!(private_key.private_key());
-        
-        rsa.sign(hash_type, &hash).map_err(From::from)
+        let pkey = try!(PKey::from_rsa(rsa));
+
+        let mut signer = openssl::sign::Signer::new(d, &pkey).unwrap();
+
+        //try!(signer.pkey_ctx_mut().set_rsa_padding(openssl::rsa::PKCS1_PADDING));
+        try!(signer.update(input));
+
+        let output = try!(signer.finish());
+
+        Ok(output)
     }
 }
 
 impl Signer for RsaSigner {
     fn sign(&self, header: &Header, signing_input: &[u8]) -> JwtResult<String> {
         let result = try!(match header.alg {
-            Algorithm::RS256 => Self::sign_with_digest(Sha256::new(), hash::Type::SHA256, &self.private_key, signing_input),
-            Algorithm::RS384 => Self::sign_with_digest(Sha384::new(), hash::Type::SHA384, &self.private_key, signing_input),
-            Algorithm::RS512 => Self::sign_with_digest(Sha512::new(), hash::Type::SHA512, &self.private_key, signing_input),
+            Algorithm::RS256 => Self::sign_with_digest(hash::MessageDigest::sha256(), &self.private_key, signing_input),
+            Algorithm::RS384 => Self::sign_with_digest(hash::MessageDigest::sha384(), &self.private_key, signing_input),
+            Algorithm::RS512 => Self::sign_with_digest(hash::MessageDigest::sha512(), &self.private_key, signing_input),
             _ => Err(JwtError::InvalidAlgorithm("algorithm is not a supported mac: ".to_owned(), header.alg))
         });
         
@@ -279,20 +286,14 @@ mod test {
         let private_key = key.private_key().unwrap();
         
         let message = load_json::<Vec<u8>>("samples/jws/a2 - rs256/3-signing-input-octets.json");
-        
-        let mut sha = Sha256::new();
-        sha.input(&message);
-        let mut hash = vec![0;32];
-        sha.result(&mut hash);
-        
-        println!("digest: {:?}", hash);
-        
-        let sig = private_key.sign(openssl::crypto::hash::Type::SHA256, &hash).unwrap();
-        
-        println!("{:?}", sig);
-        
-        // should not throw
-        public_key.verify(openssl::crypto::hash::Type::SHA256, &hash, &sig).unwrap();
+
+        let signer = RsaSigner::new(key.clone());
+
+        let sig = RsaSigner::sign_with_digest(hash::MessageDigest::sha256(), &key, &message).unwrap();
+
+        let expected_sig = load_json::<Vec<u8>>("samples/jws/a2 - rs256/5-signature-octets.json");
+
+        assert_eq!(expected_sig, sig);
     }
     
     #[test]

@@ -13,6 +13,7 @@ extern crate serde;
 #[macro_use] extern crate serde_derive;
 extern crate serde_json;
 extern crate openssl;
+extern crate openssl_sys;
 #[macro_use] extern crate log;
 extern crate chrono;
 extern crate time;

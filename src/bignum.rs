@@ -29,7 +29,7 @@ impl Part for BigNumComponent {
     
     fn from_base64<B: AsRef<[u8]>>(encoded: B) -> JwtResult<BigNumComponent> {
         let decoded = try!(encoded.as_ref().from_base64());
-        let bn = try!(BigNum::new_from_slice(&decoded));
+        let bn = try!(BigNum::from_slice(&decoded));
         Ok(BigNumComponent(bn))
     }
 }
